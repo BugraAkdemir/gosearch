@@ -34,11 +34,14 @@ see Phase 2/3 exit criteria below.
 
 ## Phase 1 — Skeleton + most reliable provider (DuckDuckGo) + Fetch
 
-- [ ] `result.go` — `Result{Title, URL, Snippet string}`
-- [ ] `errors.go` — `ErrBlocked`, `ErrChallenge`, `ErrNoResults` sentinel errors
-- [ ] `options.go` — `SearchOption`, `FetchOption` functional options (custom
-      cookies/headers/proxy, timeout, `WithFallback(engines ...Engine)`)
-- [ ] `internal/httpclient` — shared `http.Client` with:
+- [x] `result.go` — `Result{Title, URL, Snippet string}` (+ `Page` for Fetch)
+- [x] `errors.go` — `ErrBlocked`, `ErrChallenge`, `ErrNoResults`,
+      `ErrUnsupportedEngine` sentinels (values in `internal/serrors`,
+      re-exported to avoid an import cycle with internal packages)
+- [x] `options.go` — unified `Option` type (not separate Search/Fetch types):
+      timeout, user-agent, proxy, header, cookies, custom client,
+      `WithFallback`, `WithMaxResults`
+- [x] `internal/httpclient` — shared `http.Client` with:
   - full realistic Chrome-like header set (not just User-Agent): `Accept`,
     `Accept-Language`, `Accept-Encoding`, `Sec-Fetch-*`, `sec-ch-ua*`
   - persistent `http.CookieJar` across requests within a session/client
@@ -48,6 +51,9 @@ see Phase 2/3 exit criteria below.
     `ErrChallenge` / nil, based on status code, redirect target, and known
     marker strings/headers (e.g. `x-yandex-captcha`, DDG's
     `anomaly-modal`, Google's `enablejs` redirect) — documented per provider
+  - **[x] done** (`internal/httpclient`: `client.go` + `detect.go`), with
+    fixture-based detection tests against the real captured DDG/Google block
+    pages and a synthesized Yandex captcha redirect
 - [ ] `internal/providers/duckduckgo` — parses `html.duckduckgo.com/html/`
       result markup (`result__a`, `result__snippet`)
 - [ ] `internal/readability` — noise-stripping + container-scoring content
