@@ -28,92 +28,121 @@ should never have to reconstruct "what was I doing" from git log alone.
    this file's job is session narrative and handoff state, not a bug
    database. Open bugs live in `BUG_REPORT.md`.
 
-Below are two example entries showing the expected shape — a bug-fix session
-and a feature session. Delete them once the project has its own real history.
-
 ---
 
-# Handoff — <YYYY-MM-DD> (Session <N>) — <One-line title of what this session did>
+# Handoff — 2026-07-29 (Session 1) — Project bootstrap + Phase 1 core (skeleton, httpclient, DuckDuckGo, readability, orchestration)
 
 ## Summary
 
-<2-5 sentences: what problem or request kicked off this session, what
-approach was taken, and the headline outcome. Write this for someone with
-zero memory of the conversation — no "as discussed," no unexplained
-shorthand.>
+First session for `gosearch`, a new zero-API-key Go library for web search
+(Google/Yandex/DuckDuckGo via direct HTML scraping) and page-content
+extraction, extracted as a standalone project (it will also be consumed by the
+Memo project, but is designed to be general-purpose). We agreed the
+architecture and phased roadmap (`plan.md`), initialized the module + public
+GitHub repo, and implemented essentially all of **Phase 1**: core public
+types, the shared browser-like HTTP client with anti-bot block detection, the
+DuckDuckGo provider, the readability content extractor, and the root
+`Search`/`Fetch` orchestration with the fallback chain. Everything is
+fixture-based tested and green.
 
-**Commit status:** `<commit-hash>`, `<commit-hash>` — <one clause per commit,
-or "not yet committed, pending user confirmation" if that's the actual
-state. Never leave this ambiguous; the next session needs to know exactly
-what's safely on disk in git vs. what's still uncommitted working-tree state.>
+Design constraint locked in: gosearch behaves like an honest browser
+(realistic headers, cookie jar, rate limiting) but will **never** solve
+CAPTCHAs, run JS challenges, or spoof identity to defeat anti-bot controls.
+A separate opt-in `gosearch/browser` subpackage for real-browser rendering is
+planned (Phase 5) but not started.
+
+**Commit status:** all work committed and pushed to
+`https://github.com/BugraAkdemir/gosearch` (main). Commits this session:
+`6e95326` (scaffolding/design docs), `2bd9593` (fill AGENTS/BUG_REPORT),
+`ce17564` (core types/errors/options), `7cd8898` (httpclient + detection),
+`ff9bd0c` (duckduckgo + htmlx), `ec60ea5` (readability), `37ec6bf`
+(orchestration). Working tree clean except this handoff edit.
 
 ---
 
 ## What Was Done
 
-### 1. <Sub-task title>
+### 1. Project bootstrap
+- `git init`, `go mod init github.com/BugraAkdemir/gosearch`, MIT `LICENSE`,
+  `.gitignore`, public README, `CONTRIBUTING.md`, and a detailed `plan.md`
+  (5-phase roadmap incl. the browser-subpackage runtime-download and
+  `embedbrowser` embed models).
+- Created the public GitHub repo via `gh` and pushed; added repo topics.
+- Filled `AGENTS.md` with real facts: Conventional Commits, **no AI
+  attribution** in commits, zero-dependency discipline (only
+  `golang.org/x/net/html`), verification commands, anti-bot Known Pitfalls.
 
-**Root cause:** <if this was a bug fix, the actual mechanism — not just the
-symptom. "It was broken" is not a root cause; "X read a shared field without
-holding Y's lock, causing Z under concurrent access" is.>
+### 2. Phase 1 implementation
 
 | File | Change |
 |------|--------|
-| `<path>` | <what changed and why> |
-| `<path>` | <what changed and why> |
+| `result.go`, `errors.go`, `engine.go`, `options.go` | Public types: `Result`, `Page`, `Engine` enum, sentinel errors (re-exported from `internal/serrors` to dodge an import cycle), unified `Option` type + `config`. |
+| `internal/httpclient/client.go` | Shared client: realistic Chrome headers, cookie jar (domain-seeded), per-host rate limiter honoring ctx, 8 MiB body cap. Deliberately does NOT set Accept-Encoding (lets Go handle gzip). |
+| `internal/httpclient/detect.go` | `Detect()` → ErrChallenge/ErrBlocked/nil from status, redirect target, per-engine markers. |
+| `internal/htmlx/htmlx.go` | Shared DOM helpers (Attr/HasClass/Tag/Text/Walk/Find*). |
+| `internal/provider/provider.go` | Internal `Result` type providers return. |
+| `internal/providers/duckduckgo/duckduckgo.go` | Parses `html.duckduckgo.com/html`, decodes `uddg` redirect links. |
+| `internal/readability/readability.go` | Noise-strip + container-scoring content extractor → `Article{Title, Content}`. |
+| `gosearch.go` | `Search`/`Fetch`, test-overridable `dispatch` var, fallback chain (advance only on block/challenge; join on all-blocked). |
+| `testdata/` | Real captured block pages (DDG captcha, Google enablejs) + synthetic success/article fixtures. |
 
-**Deliberately not done / out of scope:** <anything a thorough pass would
-also touch but was consciously left alone this session, and why — scope
-creep avoided, a decision that needs the user's input first, a fix that's
-"good enough" but not complete. This is as important to record as what
-*was* done — it prevents the next session from either redoing the analysis
-or assuming something is finished when it isn't.>
+**Root cause note (test flake avoided):** first `Accept-Encoding` assertion
+was wrong — Go's transport transparently adds `gzip`, so the server sees it;
+fixed the test to assert transparent gzip decoding instead of an unset header.
 
-### 2. <Sub-task title, if the session had more than one>
-
-<Same shape as above.>
+**Deliberately not done / out of scope:**
+- **Google & Yandex providers (Phase 2/3):** not implemented. `Search` with
+  those engines returns an unexported not-implemented error. They were
+  deferred on purpose because all three engines blocked this build's
+  datacenter IP, so we have **no real successful HTML capture** to write/verify
+  their parsers against — that must come from a residential IP first (see
+  plan.md Phase 2/3 exit criteria).
+- **CI workflow + golangci config** (`.github/workflows/ci.yml`,
+  `.golangci.yml`) and **`examples/basic/main.go`**: remaining Phase 1 items,
+  not yet written.
+- Phase 4 (retry/backoff) and Phase 5 (browser subpackage): future.
 
 ---
 
 ## Verification
 
 ```bash
-$ <exact command run>
-<exact or faithfully excerpted output>
+$ go build ./...   # (no output = ok)
+$ go vet ./...     # (no output = ok)
+$ gofmt -l .       # (no output = all formatted)
+$ go test ./...
+ok  	github.com/BugraAkdemir/gosearch	0.004s
+?   	github.com/BugraAkdemir/gosearch/internal/htmlx	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	0.278s
+?   	github.com/BugraAkdemir/gosearch/internal/provider	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	0.005s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	0.002s
+?   	github.com/BugraAkdemir/gosearch/internal/serrors	[no test files]
 ```
 
-```bash
-$ <exact command run>
-<exact or faithfully excerpted output>
-```
+`go test -race ./...` was also run green throughout the session.
 
-<Explicitly state anything that was NOT verified and why — e.g. "not tested
-against a real <external system>, no such environment available here" or
-"unit-tested only; no live device/browser verification in this environment."
-An honest gap here is far more useful to the next session than a claim of
-completeness that isn't true.>
+**NOT verified:** no live end-to-end run against the real DuckDuckGo endpoint
+from a residential IP. All provider tests are fixture-based (by design, for
+determinism). The DuckDuckGo `parse()` is validated only against our
+*synthetic* success fixture, not a real DuckDuckGo success page — the real
+markup should be spot-checked from a residential IP and captured as a
+regression fixture. This is the single most important thing to confirm before
+trusting `Search` in the wild.
 
 ---
 
 ## Next Session
 
-1. <The single most important next step, named specifically — file, function,
-   or plan item, not just a vague area.>
-2. <Anything flagged above as "deliberately not done" that the user should
-   be asked about or that should be picked up next.>
-3. <Any known risk or fragile assumption introduced this session that the
-   next session should keep an eye on.>
-
----
-
-# Handoff — <YYYY-MM-DD> (Session <N-1>) — <Title of the prior session>
-
-## Summary
-
-<Same shape as above — this is here purely to illustrate that entries stack
-chronologically, newest on top. A real project will have many of these
-accumulating over time.>
-
-## Next Session
-
-1. <...>
+1. **Finish Phase 1:** write `examples/basic/main.go` (Search + Fetch demo)
+   and the CI workflow (`.github/workflows/ci.yml`: build, vet, gofmt check,
+   golangci-lint, `go test -race`) + `.golangci.yml`. Then run the example
+   from Bugra's own (residential) machine to confirm DuckDuckGo returns real
+   results — and capture that real HTML as a `testdata/duckduckgo/` regression
+   fixture to validate `parse()` against reality.
+2. **Then Phase 2 (Google provider):** but only after capturing a real Google
+   success page from a residential IP — do not write the parser blind against
+   the datacenter-blocked response we have.
+3. **Watch:** `go.mod` requires `go 1.25` (forced by `x/net v0.57.0`). If
+   broader Go-version compatibility becomes a goal, that means pinning an
+   older `x/net` — noted in AGENTS.md Tech Stack.
