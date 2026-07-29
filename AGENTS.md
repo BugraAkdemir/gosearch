@@ -1,8 +1,12 @@
-# AGENTS.md — <Project Name>
+# AGENTS.md — gosearch
 
-> **How to use this template:** copy this file to `AGENTS.md` in a new project and fill in every `<...>` placeholder. Delete sections that don't apply (e.g. "Mobile" if there's no mobile client) rather than leaving them empty. The **Agent Working Rules** and **Verification Commands** sections are the part worth keeping closest to verbatim — they encode a working process, not project facts, and are what actually keeps a coding agent reliable across long-running, multi-session work.
-
-<One or two sentences: what the product is, who it's for, and the core architectural bet (e.g. "local-first," "offline-capable," "multi-tenant SaaS").>
+`gosearch` is a zero-API-key Go library that does web search (Google, Yandex,
+DuckDuckGo) by fetching and parsing each engine's public HTML result page
+directly, plus a `Fetch()` that extracts the readable content of any URL. It
+exists for local-first / zero-dependency Go programs (e.g. an LLM agent's
+web-search tool) that can't or won't depend on a hosted search API. Core
+architectural bet: **stay as close to zero-dependency as possible** — the
+only third-party import is `golang.org/x/net/html`.
 
 ---
 
@@ -10,39 +14,48 @@
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Backend | `<e.g. Go, Node, Python>` | `<version>` |
-| Frontend | `<e.g. React, Flutter, SwiftUI>` | `<version>` |
-| State management | `<e.g. Redux, Riverpod, Zustand>` | `<version>` |
-| HTTP client | `<library>` | `<version>` |
-| Database | `<e.g. Postgres, SQLite>` | `<version>` |
-| Cache / queue | `<e.g. Redis, none>` | `<version>` |
+| Language | Go | `go 1.23` directive; developed on toolchain 1.26 |
+| HTML parsing | `golang.org/x/net/html` | v0.57.0 |
+| HTTP client | Go stdlib `net/http` (custom-configured) | — |
+| Everything else | Go stdlib only | — |
+
+No frontend, no database, no cache/queue — it's a library.
 
 ---
 
 ## Architecture
 
-<One paragraph: process/service topology (monolith? two-process client-server? microservices?), how components talk to each other (REST/gRPC/SSE/WebSocket), and any deliberate decoupling pattern worth naming (e.g. a bridge/adapter interface between layers).>
+Single Go module, one public package (`gosearch`) that dispatches to
+unexported provider packages. The public surface is intentionally tiny:
+`Search()`, `Fetch()`, the `Engine` enum, the functional-option types, and
+the sentinel errors. Everything else lives under `internal/` so it can be
+refactored freely without breaking anyone's import.
+
+Providers implement a common internal interface (each engine = one package
+under `internal/providers/`). A shared `internal/httpclient` gives every
+provider the same realistic-browser HTTP behavior (headers, cookie jar, rate
+limiting) and a single block-detection helper, so anti-bot handling isn't
+reimplemented per provider. `Fetch()` is engine-independent and uses
+`internal/readability` to pull main content out of arbitrary pages.
 
 ### Module Map
 
 | Directory | Responsibility | Key Files |
 |-----------|---------------|-----------|
-| `<path/>` | `<what it owns>` | `<file.ext>`, `<file.ext>` |
-| `<path/>` | `<what it owns>` | `<file.ext>` |
+| `.` (package `gosearch`) | Public API: `Search`/`Fetch`, `Engine`, options, sentinel errors, provider dispatch + fallback chain | `gosearch.go`, `result.go`, `errors.go`, `options.go` |
+| `internal/httpclient/` | Shared HTTP client: realistic headers, cookie jar, per-host rate limiter, block-detection helper | `client.go` |
+| `internal/providers/duckduckgo/` | Parse `html.duckduckgo.com/html/` results | `duckduckgo.go` |
+| `internal/providers/google/` | Parse Google result page (best-effort, see Pitfalls) | `google.go` |
+| `internal/providers/yandex/` | Parse Yandex result page (most fragile, see Pitfalls) | `yandex.go` |
+| `internal/readability/` | Noise-stripping + container-scoring content extractor for `Fetch()` | `readability.go` |
+| `examples/basic/` | Runnable usage example | `main.go` |
+| `testdata/` | Captured real block pages + synthetic success fixtures per provider | `*/blocked.html`, `*/success.html` |
 
 ### Entry Points
 
-`<how the app boots — main.go / index.ts / App.swift — and what it wires together before handing off to the framework's own runtime.>`
-
----
-
-## Data & Config Layout
-
-| Path | Purpose |
-|------|---------|
-| `<config path>` | All runtime settings |
-| `<data dir>/<subdir>` | `<what's stored there>` |
-| `.env` | Secrets / environment overrides |
+It's a library — no `main`. The public entry points are `gosearch.Search()`
+and `gosearch.Fetch()` in `gosearch.go`. `examples/basic/main.go` is the only
+runnable binary and exists purely to demonstrate/verify the API by hand.
 
 ---
 
@@ -51,114 +64,129 @@
 ### Quick Start
 
 ```bash
-<install deps>
-<run dev server / dev client>
-```
-
-### Build
-
-```bash
-<production build command(s), one per deployable artifact>
+go build ./...
+go run ./examples/basic          # hits the live web; may be blocked from datacenter IPs
 ```
 
 ### Testing
 
 ```bash
-<unit test command>
-<lint/analyze command>
-<e2e/integration test command, if any>
+go test -race ./...              # unit tests: fixture-based, no network required
+go vet ./...
+gofmt -l .                       # must print nothing
 ```
 
-CI: `<what runs on push/PR and where — e.g. "GitHub Actions runs lint + unit tests on every push">`.
+Tests are **fixture-based and offline by default** — they parse captured HTML
+under `testdata/`, they do NOT hit the live engines (that would be flaky,
+rate-limited, and IP-dependent). Any future live/integration test must be
+gated behind a build tag (e.g. `//go:build integration`) so `go test ./...`
+stays deterministic and CI-safe.
+
+CI: GitHub Actions (`.github/workflows/ci.yml`) runs `go build`, `go vet`,
+`gofmt` check, `golangci-lint`, and `go test -race` on every push and PR.
 
 ### Release
 
-`<Pointer to a dedicated release process/checklist if one exists (versioned files to bump, changelog format, artifact naming, publish targets) — don't inline the whole checklist here if it's long; link to a skill/script/doc instead, and reference it, the way this section does.>`
+No release process yet (pre-v0.1). When one exists: tag `vX.Y.Z` on `main`;
+`go get` + `proxy.golang.org` handle distribution automatically (no separate
+publish step).
 
-**Hard rule:** `<any release/deploy action that is real, visible, and hard to reverse — e.g. "never push a version tag / trigger a deploy without the user explicitly asking for it in that specific moment.">`
+**Hard rule:** never push a git tag / cut a release without the user
+explicitly asking for it in that specific moment — a tag is public and
+effectively permanent on the Go module proxy once fetched.
 
 ---
 
 ## Known Pitfalls & Technical Debt
 
-> This section is a **living log**, not a wiki page. Follow the convention below religiously — it's what makes this file trustworthy after months of sessions instead of just accumulating stale claims:
->
-> - When you find a bug, add a bullet describing the **symptom and root cause**, in plain language, as if explaining it to the next agent who has zero context.
-> - When it's fixed, don't delete the bullet — wrap the original description in `~~strikethrough~~` and append `→ fixed <date> (<commit-ish>): <what changed and why, plus any residual risk or what's *not* covered>`.
-> - If a claim turns out to be **stale or was never true** (re-verified and the described code no longer exists, or never behaved that way), mark it `→ stale: <what you actually found>` rather than silently deleting it — the correction itself is information for the next session.
-> - Group entries under a `### <Module/Area>` heading per subsystem, with a date if the finding is time-sensitive.
-> - Never re-describe a fix that's already fully captured by `git log`/commit messages — link to the commit hash instead of duplicating the diff in prose.
+> Living log. When you find a bug, add a bullet (symptom + root cause). When
+> fixed, `~~strike~~` it and append `→ fixed <date> (<commit>): ...`. If a
+> claim turns out stale, mark `→ stale: ...` rather than deleting it.
 
-### `<Module A>` (`<path/>`)
-- <Open or fixed issue, following the convention above.>
-
-### `<Module B>` (`<path/>`)
-- <Open or fixed issue, following the convention above.>
+### Anti-bot / providers (2026-07-29, design-phase findings)
+- All three engines returned an anti-bot response on the **first** request
+  from this project's build sandbox (a datacenter IP): DuckDuckGo served an
+  image-captcha (`anomaly-modal` markup), Google returned a JS-challenge page
+  (`/httpservice/retry/enablejs` redirect, no real results), Yandex 302'd to
+  `showcaptchafast` with an `x-yandex-captcha: captcha` header. This is
+  believed IP-reputation driven; residential IPs should fare much better.
+  **Consequence for parsers:** Google/Yandex parsers are written against
+  documented/known markup, not a real successful capture — they must be
+  re-validated against a real success page from a residential IP before being
+  trusted (Phase 2/3 exit criteria in `plan.md`).
+- Google's result DOM is regionally A/B tested and changes without notice —
+  any parser here is inherently best-effort. Don't treat a parse miss as
+  necessarily a bug in our code; capture the actual HTML first.
 
 ### Security
-- <Any hardening work worth remembering — auth gaps closed, secrets handling, rate limiting, path traversal, etc.>
+- Block-detection markers (header names, redirect substrings, marker CSS
+  classes) live in `internal/httpclient`. Treat them as untrusted external
+  input — never `eval`/execute anything from a fetched page; we only ever
+  string-match against it.
 
 ---
 
 ## Agent Working Rules (READ FIRST, EVERY SESSION)
 
 1. **Start of session:** read this file, then `handoff.md` (top entry = last session's state and pending work).
-2. **End of session:** prepend a new entry to `handoff.md` (what was done, commit status, verification results, what's next). This is how context survives between sessions and models — treat it as the primary handoff mechanism, not an afterthought.
+2. **End of session:** prepend a new entry to `handoff.md` (what was done, commit status, verification results, what's next). This is the primary cross-session/cross-model handoff mechanism, not an afterthought.
 3. **Never claim "done" without running the verification commands below and pasting the actual results.** A claim unbacked by a real command's output is not verification.
-4. Plan files (`plan.md`, `PLAN_*.md`) contain step-by-step implementation plans — follow them in order, tick items off as completed, don't improvise a different architecture mid-plan. If the plan turns out to be wrong, say so and update the plan file rather than silently diverging from it.
+4. Plan lives in `plan.md` — follow it in order, tick items off, don't improvise a different architecture mid-plan. If the plan is wrong, say so and edit `plan.md` rather than silently diverging.
 5. Work in small units: a bounded number of plan items per session, each with its own tests, verified green before moving to the next.
-6. **Commit automatically, without asking for confirmation, once a fix/feature is verified green.** Don't ask "should I commit?" — just commit, using this project's commit convention (`<e.g. Conventional Commits: fix(scope): ..., feat(scope): ...>`), with a body that explains the *why* (root cause, what changed, what it fixes) — and `<state the project's actual attribution policy here explicitly, e.g. "never include an AI-attribution / Co-Authored-By line, under any circumstance" or the opposite if the project wants one — this must be an explicit, stated choice, not left implicit>`. **Commit frequently, not just once per finished task** — break a multi-step request into checkpoints and commit after each one once it's verified, especially right before a risky step (a refactor touching a hot/shared code path, a change you're not fully certain about). Finer-grained history means a bad step can be bisected/reverted without losing unrelated good work from the same session. Don't over-fragment either — this is about natural checkpoints, not every file save.
-7. **Code exploration:** `<if the project has a code-graph/indexing tool available, name it here and state when to prefer it over blind grepping — e.g. "use search_graph/trace_path for 'who calls X' questions before grepping". Delete this rule if no such tooling exists.>`
-8. `<Any zero-tolerance project convention worth stating as a hard rule — e.g. "all user-facing strings go through the i18n layer, no exceptions" or "no direct SQL writes outside the serialized write path.">` State *why* it's a hard rule (what shipped bug it prevents) so a future agent understands it's not just style preference.
-9. **Documentation is not optional.** Every exported type, function, and package gets a real Go doc comment (what it does and any non-obvious behavior — not a restatement of the name). When a change adds or changes public API, exported error types, or provider/fallback behavior, update `README.md`'s usage examples in the same commit — a doc that describes a signature the code no longer has is worse than no doc. Package-level docs (`doc.go` or a top-of-file comment) must state what the package is for and its actual limitations (e.g. anti-bot fragility per provider), not just what it does when things go well.
+6. **Commit automatically, without asking, once a fix/feature is verified green.** Use **Conventional Commits** (`feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `test(scope): ...`, `ci: ...`, `refactor(scope): ...`), with a body explaining the *why*. **Never include an AI-attribution / `Co-Authored-By` line, under any circumstance.** Commit frequently at natural checkpoints (not every file save, not only once per whole task) — especially right before a risky step, so history can be bisected/reverted cleanly.
+7. **Code exploration:** the codebase-memory MCP tools (`search_graph`, `trace_path`, `get_code_snippet`) are available and preferred over blind grepping for "who calls X / what does X call" questions once the project has enough code to index. For a package this small, plain Read/Grep is fine too — use judgment.
+8. **Zero-dependency discipline is a hard rule:** do not add any third-party dependency beyond `golang.org/x/net/html` without recording an explicit decision in this file first. The entire value proposition is being lightweight enough to drop into a local-first project — a stray dependency silently breaks that promise for every downstream user.
+9. **Documentation is not optional.** Every exported type, function, and package gets a real Go doc comment (behavior, not a name restatement). When a change adds or changes public API, exported errors, or provider/fallback behavior, update `README.md`'s examples in the **same commit**. Package-level docs must state real limitations (per-provider anti-bot fragility), not just the happy path.
 
 ### Verification Commands (mandatory before any "done" claim)
 
 ```bash
-# Backend
-<build command>
-<lint/vet command>
-<test command, with -race or equivalent if the language supports it>
-
-# Frontend
-<build/analyze command>
-<test command>
-
-# Project-specific convention checks (delete if not applicable)
-<e.g. a grep-based check for hardcoded UI strings, or a schema-drift check>
+go build ./...
+go vet ./...
+gofmt -l .            # must print NOTHING; any output = unformatted file
+go test -race ./...
 ```
 
-Acceptable pre-existing noise: `<list any known, accepted lint warnings that aren't worth chasing, so the agent doesn't waste a session "fixing" something already triaged as fine>`. Anything else new must be addressed before claiming done.
+If `golangci-lint` is installed locally, also run `golangci-lint run`; CI
+runs it regardless.
+
+Acceptable pre-existing noise: none currently. Any new vet/lint/test failure
+must be addressed before claiming done.
 
 ---
 
 ## Gotchas (project-specific traps — violating these causes real, shipped bugs)
 
-> Keep this section brutally concrete. Each bullet should name the exact file/pattern and the exact failure mode it caused — "be careful with concurrency" is useless; "X reads Y without holding Z's mutex, causing a data race confirmed under `-race` on <date>" is useful.
+**HTTP / anti-bot**
+- A `200 OK` does NOT mean success — an engine can serve a captcha/challenge
+  page with status 200 (DuckDuckGo does exactly this). Always run the
+  response through the block-detector before parsing; a parser fed a captcha
+  page will return zero results and look like a "no results" bug.
+- Block detection must run on the *final* response after redirects (Yandex
+  signals via a 302 to `showcaptchafast`). Don't disable redirect following
+  without preserving the ability to see that the redirect happened.
 
-**Paths & data**
-- <e.g. "All data paths go through a single accessor function — never hardcode a data directory; it differs per OS/deployment target.">
+**Parsing**
+- Providers `errors.Is`-match sentinel errors; callers must never string-match
+  error text. If you wrap an error, wrap with `%w` so `errors.Is` still works
+  through the fallback chain (which uses `errors.Join`).
+- `testdata/*/blocked.html` are real captured captcha/challenge pages — they
+  are the regression guard that block-detection keeps working. Don't
+  "clean them up" or regenerate them casually.
 
-**Concurrency & architecture**
-- <e.g. "All writes to the shared store go through a single serialized write path — calling the raw driver directly bypasses it and has corrupted data before.">
-- <e.g. "This resource is swapped at runtime under a specific mutex — always take that mutex before touching it.">
-
-**Streaming / real-time**
-- <e.g. "Frontend stream timeout must match the backend's generation budget exactly — a mismatch here has silently aborted valid slow responses before.">
-- <e.g. "Any 'is this operation still in-progress' flag must be cleared by *every* exit path of the function that sets it — a branch that returns early without clearing it leaves the UI stuck. Grep every branch, not just the happy path, before declaring a fix complete.">
-
-**Framework-specific**
-- <e.g. React/Riverpod/Vue-specific footguns this project has actually hit — instance reuse across rebuilds, stale closures, etc.>
-
-**Types & misc**
-- <e.g. "Two same-named types in different packages/modules are NOT interchangeable — they don't cross-assign.">
-- <Any intentional, non-obvious product decision that looks like a bug but isn't (e.g. mixed-language UI is intentional for the target audience) — state it here so it isn't "fixed" by mistake.>
+**Fallback**
+- `WithFallback` only advances to the next engine on `ErrBlocked`/
+  `ErrChallenge` — NOT on a successful-but-empty result (0 results is a valid
+  answer, not a failure). Preserve this distinction; conflating them will
+  hammer every fallback engine on every empty query.
 
 ---
 
 ## Known Open Work
 
-Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't duplicate that list here. As of `<date>` it has `<N>` open items.
+Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't
+duplicate that list here. As of 2026-07-29 it has 0 open items (pre-v0.1,
+Phase 1 in progress).
 
 ---
 
@@ -166,5 +194,5 @@ Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't duplic
 
 - Errors are values, never panics across package boundaries. Providers return typed sentinel errors (`ErrBlocked`, `ErrChallenge`, `ErrNoResults`) wrapped with context via `fmt.Errorf("%w: ...")` — callers `errors.Is` against the sentinel, never string-match an error message.
 - No third-party dependency beyond `golang.org/x/net/html` without an explicit decision recorded here — the whole point of this library is staying close to zero-dependency for people who can't/won't pull in an API SDK.
-- Every exported symbol has a doc comment (see Agent Working Rules #9). `godoc`/`go doc ./...` should read as a complete usage guide on its own, not just a name restatement.
+- Every exported symbol has a doc comment (see Agent Working Rules #9). `go doc ./...` should read as a complete usage guide on its own, not just a name restatement.
 - Provider packages under `internal/providers/` are intentionally unexported — the public surface is the root package's `Search`/`Fetch` plus the `Engine` enum. Don't promote a provider package to public API without a deliberate decision recorded here first.
