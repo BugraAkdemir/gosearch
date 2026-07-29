@@ -11,10 +11,10 @@ readable content out of any URL — title and main body text, with
 navigation/ads/footers stripped — for feeding page content into something
 like an LLM agent's context.
 
-> **Status: pre-implementation.** The architecture, public API, and roadmap
-> below are the agreed design — see [`plan.md`](./plan.md) for the phased
-> build-out and current progress. Nothing in the "Usage" section is
-> functional yet; it documents the API this library is being built to.
+> **Status: Phase 1 (pre-v0.1).** The DuckDuckGo provider and `Fetch()` are
+> implemented and tested; Google and Yandex are defined engines but their
+> providers are not built yet (they currently return an error) — see
+> [`plan.md`](./plan.md) for the phased build-out and current progress.
 
 ---
 
@@ -87,10 +87,8 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Search, falling back to DuckDuckGo then Yandex if Google is blocked.
-	results, err := gosearch.Search(ctx, "facebook", gosearch.Google,
-		gosearch.WithFallback(gosearch.DuckDuckGo, gosearch.Yandex),
-	)
+	// Search DuckDuckGo (the implemented engine today).
+	results, err := gosearch.Search(ctx, "facebook", gosearch.DuckDuckGo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -99,13 +97,23 @@ func main() {
 	}
 
 	// Fetch and read a page's actual content, not its raw HTML.
-	page, err := gosearch.Fetch(ctx, "https://facebook.com")
+	page, err := gosearch.Fetch(ctx, "https://en.wikipedia.org/wiki/Facebook")
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(page.Title)
 	fmt.Println(page.Content)
 }
+```
+
+Once the Google and Yandex providers land (Phase 2/3), you'll be able to set
+a primary engine and fall back automatically when it's blocked:
+
+```go
+// Try Google first; fall back to DuckDuckGo, then Yandex, on a block/challenge.
+results, err := gosearch.Search(ctx, "facebook", gosearch.Google,
+	gosearch.WithFallback(gosearch.DuckDuckGo, gosearch.Yandex),
+)
 ```
 
 ## Reliability, honestly

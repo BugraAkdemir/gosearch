@@ -64,8 +64,12 @@ see Phase 2/3 exit criteria below.
       against a synthetic noisy article fixture (asserts prose kept,
       nav/ads/footer stripped), title fallback chain, empty/JS-only page, and
       malformed HTML.
-- [ ] `gosearch.go` — root `Search(ctx, query, Engine, ...SearchOption)` and
-      `Fetch(ctx, url, ...FetchOption)`, dispatch table, fallback-chain logic
+- [x] `gosearch.go` — root `Search(ctx, query, Engine, ...Option)` and
+      `Fetch(ctx, url, ...Option)`, dispatch table (var, test-overridable),
+      fallback-chain logic (advances only on ErrBlocked/ErrChallenge; joins
+      errors when all blocked; ErrNoResults/other errors are final). Google/
+      Yandex dispatch returns an unexported not-implemented error until their
+      phases. Orchestration + Fetch tested via httptest + fake dispatch.
 - [ ] Tests: DuckDuckGo block-detection against the real captured captcha
       fixture (`testdata/duckduckgo/blocked.html`, captured 2026-07-29);
       parser against a synthetic success fixture; readability extractor
