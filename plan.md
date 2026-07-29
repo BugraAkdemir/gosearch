@@ -59,8 +59,11 @@ see Phase 2/3 exit criteria below.
       redirect param to the real destination URL. Shares `internal/htmlx` DOM
       helpers and returns `internal/provider.Result`. Tested against the
       synthetic success fixture + real captured captcha + empty-page cases.
-- [ ] `internal/readability` — noise-stripping + container-scoring content
-      extractor used by `Fetch()`
+- [x] `internal/readability` — noise-stripping + container-scoring content
+      extractor used by `Fetch()`. Returns `Article{Title, Content}`; tested
+      against a synthetic noisy article fixture (asserts prose kept,
+      nav/ads/footer stripped), title fallback chain, empty/JS-only page, and
+      malformed HTML.
 - [ ] `gosearch.go` — root `Search(ctx, query, Engine, ...SearchOption)` and
       `Fetch(ctx, url, ...FetchOption)`, dispatch table, fallback-chain logic
 - [ ] Tests: DuckDuckGo block-detection against the real captured captcha
