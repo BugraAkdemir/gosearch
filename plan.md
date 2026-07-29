@@ -54,8 +54,11 @@ see Phase 2/3 exit criteria below.
   - **[x] done** (`internal/httpclient`: `client.go` + `detect.go`), with
     fixture-based detection tests against the real captured DDG/Google block
     pages and a synthesized Yandex captcha redirect
-- [ ] `internal/providers/duckduckgo` — parses `html.duckduckgo.com/html/`
-      result markup (`result__a`, `result__snippet`)
+- [x] `internal/providers/duckduckgo` — parses `html.duckduckgo.com/html/`
+      result markup (`result__a`, `result__snippet`), decodes the `uddg`
+      redirect param to the real destination URL. Shares `internal/htmlx` DOM
+      helpers and returns `internal/provider.Result`. Tested against the
+      synthetic success fixture + real captured captcha + empty-page cases.
 - [ ] `internal/readability` — noise-stripping + container-scoring content
       extractor used by `Fetch()`
 - [ ] `gosearch.go` — root `Search(ctx, query, Engine, ...SearchOption)` and

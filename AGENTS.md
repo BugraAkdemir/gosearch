@@ -14,7 +14,7 @@ only third-party import is `golang.org/x/net/html`.
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Language | Go | `go 1.23` directive; developed on toolchain 1.26 |
+| Language | Go | `go 1.25` directive (required by x/net v0.57.0); developed on toolchain 1.26 |
 | HTML parsing | `golang.org/x/net/html` | v0.57.0 |
 | HTTP client | Go stdlib `net/http` (custom-configured) | — |
 | Everything else | Go stdlib only | — |
