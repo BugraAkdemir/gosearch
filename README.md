@@ -30,14 +30,18 @@ a web browser would.
 
 ## What it does
 
-- **`Search(ctx, query, engine, ...opts)`** — queries Google, Yandex, or
+- **`Search(ctx, query, engine, ...Option)`** — queries Google, Yandex, or
   DuckDuckGo and returns parsed `[]Result{Title, URL, Snippet}`.
-- **`Fetch(ctx, url, ...opts)`** — fetches any URL and extracts its main
-  readable content (a simplified readability-style algorithm), not a raw
-  HTML dump.
+- **`Fetch(ctx, url, ...Option)`** — fetches any URL and extracts its main
+  readable content (a simplified readability-style algorithm) into a
+  `Page{URL, Title, Content}`, not a raw HTML dump.
 - **Engine fallback** — `WithFallback(engine, engine, ...)` tries engines in
   the order you specify and moves to the next one if the current one reports
   it's blocked, instead of failing outright.
+- **One `Option` type** — `WithTimeout`, `WithProxy`, `WithHeader`,
+  `WithCookies`, `WithUserAgent`, and `WithHTTPClient` work on both `Search`
+  and `Fetch`; `WithFallback` and `WithMaxResults` are search-only and are
+  ignored by `Fetch`.
 - **Honest failure signaling** — if an engine's anti-bot system blocks the
   request, you get a typed `ErrBlocked`/`ErrChallenge` error, not a silent
   empty result or a parse panic on a captcha page.
