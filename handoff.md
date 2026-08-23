@@ -30,6 +30,53 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3, leg 6 (same day) — Phase 5 built: gosearch/browser separate module
+
+User asked for the optional browser engine AND the ability to bake it into a
+binary. Implemented per plan.md's own design (runtime download by default,
+embed via build tag — a true in-binary Chromium is not shippable from git;
+go:embed needs the archive present at compile time, which is exactly what
+the `gosearch_embed_engine` tag + `tools/fetch-engine` provide).
+
+- `browser/` = SEPARATE Go module (`replace ../`), so chromedp never enters
+  the core module's dependency graph; dependency exception recorded in
+  AGENTS.md rule 8 as required.
+- Resolution ladder: WithExecutable > embedded archive > system discovery
+  (Edge→Chrome→Chromium→chrome-headless-shell names + OS paths) >
+  AllowDownload(true) → chrome-headless-shell from Google's official CFD CDN
+  into UserCacheDir/gosearch/browser/<version>/ (persistent). Plus Install()
+  pre-warm and WithCacheDir override (both were spec'd in plan.md).
+- Engine: lazy single process + single reused tab; images/GPU off; Search()
+  and Fetch() over post-JS DOM with structural h3-in-anchor heuristics;
+  failures map to core sentinels (ErrChallenge on consent/captcha walls).
+  Unmodified browser only — plan's anti-stealth line restated in package doc
+  and README.
+- Tests: offline suite (manifest parsing, platform slugs via seams,
+  exec-bit-preserving unzip, zip-slip containment) all green; live
+  integration test behind `-tags integration` skips without a browser.
+  Sandbox has NO browser installed, so the JS-only-page verification part of
+  Phase 5's exit criteria remains open — see plan.md annotation: run it on
+  any machine with Chrome.
+- CI: new parallel `browser` job (build/vet/gofmt/lint v2.13.1/test).
+- golangci-lint found one gocritic nit locally before push (fixed); lint now
+  clean on both modules with the CI-pinned v2.13.1.
+
+**Commits:** `a99208e feat(browser)`, docs commit, handoff commit.
+
+**Verification (pasted):**
+```
+ROOT    : go build/vet ok, gofmt empty, golangci-lint "0 issues", tests green
+BROWSER : go build/vet ok (default AND -tags gosearch_embed_engine compile-
+          checked), gofmt empty, golangci-lint "0 issues", go test -race ./... ok
+```
+
+**Next Session:** nothing planned. Open threads: (a) user-supplied Google/
+Yandex real captures (Phases 2/3 exit criteria), (b) user-run integration test
+on a browser-equipped machine (Phase 5 exit criterion), (c) publish decision
+for the browser module (multi-module repos need prefixed tags like
+`browser/v0.1.0`) — requires explicit fresh ask like any release, (d) Firefox
+support if ever demanded (recorded deferral in plan.md).
+
 ## Session 3, leg 5 (same day) — post-release CI failure caught and fixed forward
 
 Checking CI after the v0.1.0 push surfaced a red run: golangci-lint (revive)
