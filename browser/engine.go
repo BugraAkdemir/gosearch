@@ -129,10 +129,14 @@ func (e *Engine) run(ctx context.Context, timeout time.Duration, actions ...chro
 
 // warmUp navigates Google's homepage once per Engine so the session picks up
 // ordinary first-visit cookies before the first search — the natural human
-// flow (open site, then search). Best-effort: failures are ignored and never
-// retried; the search itself reports any real problem.
-func (e *Engine) warmUp(_ context.Context) {
+// flow (open site, then search). It starts the browser if this is the very
+// first call. Best-effort: failures are ignored and never retried; the
+// search itself reports any real problem.
+func (e *Engine) warmUp(ctx context.Context) {
 	e.warmed.Do(func() {
+		if err := e.start(ctx); err != nil {
+			return // Search's own error path reports startup failures
+		}
 		dctx, cancel := context.WithTimeout(e.ctx, 15*time.Second)
 		defer cancel()
 		_ = chromedp.Run(dctx,
