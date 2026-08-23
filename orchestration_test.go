@@ -97,7 +97,7 @@ func TestSearchNoResultsDoesNotFallback(t *testing.T) {
 }
 
 func TestFetchExtractsContent(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><head><title>My Page</title></head>
 			<body><nav><a href="/">Home</a></nav>
 			<article><p>This is the real body prose, with commas, long enough to score as the main content of the page.</p></article>
@@ -121,7 +121,7 @@ func TestFetchExtractsContent(t *testing.T) {
 }
 
 func TestFetchDetectsBlocked(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
 	}))
 	defer srv.Close()

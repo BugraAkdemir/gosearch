@@ -77,7 +77,7 @@ func TestGetTransparentlyDecodesGzip(t *testing.T) {
 
 func TestGetUserAgentAndExtraHeaderOverride(t *testing.T) {
 	var got http.Header
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		got = r.Header.Clone()
 	}))
 	defer srv.Close()
@@ -104,7 +104,7 @@ func TestGetUserAgentAndExtraHeaderOverride(t *testing.T) {
 }
 
 func TestRateLimitSpacesRequestsToSameHost(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	defer srv.Close()
 
 	c, err := New(Config{MinInterval: 100 * time.Millisecond})
@@ -125,7 +125,7 @@ func TestRateLimitSpacesRequestsToSameHost(t *testing.T) {
 }
 
 func TestRateLimitRespectsContextCancellation(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {}))
 	defer srv.Close()
 
 	c, err := New(Config{MinInterval: 10 * time.Second})
@@ -151,7 +151,7 @@ func TestRateLimitRespectsContextCancellation(t *testing.T) {
 
 func TestBodyIsCapped(t *testing.T) {
 	// Serve more than maxBodyBytes; Get must return at most maxBodyBytes.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		chunk := strings.Repeat("a", 1<<20) // 1 MiB
 		for i := 0; i < 10; i++ {           // 10 MiB total
 			_, _ = w.Write([]byte(chunk))

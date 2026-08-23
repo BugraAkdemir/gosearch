@@ -169,7 +169,7 @@ func (c *Client) Get(ctx context.Context, rawURL string) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("httpclient: get %q: %w", rawURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {

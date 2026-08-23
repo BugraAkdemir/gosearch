@@ -146,7 +146,7 @@ func TestSearchEndToEndSuccess(t *testing.T) {
 }
 
 func TestSearchDetectsBlockedPage(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(fixture(t, "blocked.html")) // real captured captcha page, status 200
 	}))
 	defer srv.Close()
@@ -162,7 +162,7 @@ func TestSearchDetectsBlockedPage(t *testing.T) {
 }
 
 func TestSearchNoResults(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><body><div id="links" class="results"></div></body></html>`))
 	}))
 	defer srv.Close()
