@@ -70,12 +70,12 @@ see Phase 2/3 exit criteria below.
       errors when all blocked; ErrNoResults/other errors are final). Google/
       Yandex dispatch returns an unexported not-implemented error until their
       phases. Orchestration + Fetch tested via httptest + fake dispatch.
-- [ ] Tests: DuckDuckGo block-detection against the real captured captcha
+- [x] Tests: DuckDuckGo block-detection against the real captured captcha
       fixture (`testdata/duckduckgo/blocked.html`, captured 2026-07-29);
       parser against a synthetic success fixture; readability extractor
       against a local `httptest` fixture page
-- [ ] `examples/basic/main.go`
-- [ ] CI (`golangci-lint` + `go vet` + `go test -race`), `.gitignore`,
+- [x] `examples/basic/main.go`
+- [x] CI (`golangci-lint` + `go vet` + `go test -race`), `.gitignore`,
       `LICENSE` (MIT), public `README.md` with an honest per-engine
       reliability note
 - **Exit criteria:** `go build ./...`, `go vet ./...`, `gofmt -l .` clean,
