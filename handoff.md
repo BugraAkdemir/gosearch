@@ -30,6 +30,62 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3, leg 2 (same day) — Phase 3 (Yandex) built; all engines wired
+
+Continued straight down plan.md into Phase 3. `internal/providers/yandex/`
+(`yandex.go` + `yandex_test.go`): `li.serp-item` containers scope every lookup
+so adjacent results cannot leak into each other; titles from `h2` inside
+`a.organic__url`; snippets from `organic__text`. `cleanURL` promotes
+protocol-relative hrefs to https, unwraps `/clck/` click-trackers only when a
+decodable destination rides in a query param (`url`/`u`/`www`), and rejects
+Yandex-internal destinations (relative + absolute `/search/` pagination,
+`/passport` path AND `passport.`/`captcha.` hosts — the host check exists
+because the real failing case was `passport.yandex.ru/auth`, whose *path*
+carries no passport prefix). Dedup + maxResults cap + ErrNoResults match the
+other providers.
+
+Tests: synthetic `testdata/yandex/success.html` (direct + protocol-relative
+hrefs, pagination and undecodable-clck items that must be skipped), cleanURL
+table, dedup, maxResults, end-to-end httptest success (asserts the query goes
+in the `text` param), NoResults, and the plan-specified mocked
+302-to-showcaptcha block test (handler terminates at `/showcaptcha` with a
+200 body, mirroring how the live engine serves the captcha page at that URL;
+Detect classifies via FinalURL). `TestParseRealSuccessFixture` follows the
+Google skip-until-capture pattern against `testdata/yandex/real_success.html`.
+
+Cleanup: `errNotImplemented` and its dispatch branch are gone — all three
+engines are wired; `TestSearchNotImplementedEngines` deleted with them.
+README status block → "Phase 3", `docs/API.md` bullet rewritten,
+`docs/ARCHITECTURE.md` provider-status table updated (the old table still
+claimed Google/Yandex "Not implemented"), Phase 3 plan items ticked.
+
+**Commits:** `0ead2ef feat(providers): yandex`, plus this docs commit.
+
+**Verification (pasted):**
+
+```
+$ go build ./... && go vet ./... && gofmt -l . && go test -race -count=1 ./...
+ok  	github.com/BugraAkdemir/gosearch	1.040s
+?  	github.com/BugraAkdemir/gosearch/examples/basic	[no test files]
+?  	github.com/BugraAkdemir/gosearch/internal/htmlx	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.497s
+?  	github.com/BugraAkdemir/gosearch/internal/provider	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.058s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/google	1.057s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/yandex	1.054s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	1.035s
+?  	github.com/BugraAkdemir/gosearch/internal/serrors	[no test files]
+```
+(gofmt printed nothing.)
+
+**Next Session:** Phase 4 — Hardening: retry/backoff on transient failures,
+end-to-end `WithFallback` confirmation, README per-engine reliability +
+custom-client docs, final AGENTS.md/BUG_REPORT.md pass. Still pending from
+Phases 2/3 exit criteria (user action, one-time): drop real captures from a
+trusted network at `testdata/google/real_success.html` and
+`testdata/yandex/real_success.html` — both regression tests activate
+automatically and close those criteria.
+
 ## Session 3 (2026-08-23) — CI-vs-residential question answered; Phase 2 (Google) built and green
 
 The user asked whether Google/Yandex real-success validation could be done on
