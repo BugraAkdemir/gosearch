@@ -132,9 +132,9 @@ func TestSearchEndToEndSuccess(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	old := endpoint
-	endpoint = srv.URL
-	defer func() { endpoint = old }()
+	old := Endpoint
+	Endpoint = srv.URL
+	defer func() { Endpoint = old }()
 
 	results, err := Search(context.Background(), newTestClient(t), "facebook", 0)
 	if err != nil {
@@ -151,9 +151,9 @@ func TestSearchDetectsBlockedPage(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	old := endpoint
-	endpoint = srv.URL
-	defer func() { endpoint = old }()
+	old := Endpoint
+	Endpoint = srv.URL
+	defer func() { Endpoint = old }()
 
 	_, err := Search(context.Background(), newTestClient(t), "facebook", 0)
 	if !errors.Is(err, serrors.ErrChallenge) {
@@ -167,9 +167,9 @@ func TestSearchNoResults(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	old := endpoint
-	endpoint = srv.URL
-	defer func() { endpoint = old }()
+	old := Endpoint
+	Endpoint = srv.URL
+	defer func() { Endpoint = old }()
 
 	_, err := Search(context.Background(), newTestClient(t), "asdkjhaskdjh", 0)
 	if !errors.Is(err, serrors.ErrNoResults) {

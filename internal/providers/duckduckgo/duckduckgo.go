@@ -25,14 +25,14 @@ import (
 // endpoint is DuckDuckGo's no-JS HTML search endpoint. It accepts the query as
 // the q parameter and returns server-rendered result markup. It is a var, not a
 // const, so tests can point Search at a local httptest server.
-var endpoint = "https://html.duckduckgo.com/html/"
+var Endpoint = "https://html.duckduckgo.com/html/"
 
 // Search queries DuckDuckGo for query and returns up to maxResults results
 // (maxResults <= 0 means no cap). It returns serrors.ErrChallenge/ErrBlocked if
 // the endpoint blocks the request, or serrors.ErrNoResults if the page parsed
 // cleanly but contained no results.
 func Search(ctx context.Context, client *httpclient.Client, query string, maxResults int) ([]provider.Result, error) {
-	u := endpoint + "?q=" + url.QueryEscape(query)
+	u := Endpoint + "?q=" + url.QueryEscape(query)
 	resp, err := client.Get(ctx, u)
 	if err != nil {
 		return nil, fmt.Errorf("duckduckgo: %w", err)

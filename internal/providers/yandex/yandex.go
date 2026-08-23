@@ -29,14 +29,14 @@ import (
 // endpoint is Yandex's web search URL. It accepts the query as the text
 // parameter and returns server-rendered organic-result markup. It is a var,
 // not a const, so tests can point Search at a local httptest server.
-var endpoint = "https://yandex.com/search/"
+var Endpoint = "https://yandex.com/search/"
 
 // Search queries Yandex for query and returns up to maxResults results
 // (maxResults <= 0 means no cap). It returns serrors.ErrChallenge/ErrBlocked
 // if Yandex challenges or blocks the request, or serrors.ErrNoResults if the
 // page parsed cleanly but contained no results.
 func Search(ctx context.Context, client *httpclient.Client, query string, maxResults int) ([]provider.Result, error) {
-	u := endpoint + "?text=" + url.QueryEscape(query)
+	u := Endpoint + "?text=" + url.QueryEscape(query)
 	resp, err := client.Get(ctx, u)
 	if err != nil {
 		return nil, fmt.Errorf("yandex: %w", err)
