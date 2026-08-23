@@ -158,6 +158,11 @@ Full phased build-out, exit criteria, and design rationale live in
 4. Fallback/retry hardening
 5. Optional real-browser rendering subpackage
 
+## Documentation
+
+- [`docs/API.md`](./docs/API.md) — human-readable API reference (`go doc -all .` is the source of truth; this is a companion, not a replacement).
+- [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — package graph, request flow, and the reasoning behind the `internal/` split.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) and [`AGENTS.md`](./AGENTS.md) —

@@ -49,7 +49,8 @@ reimplemented per provider. `Fetch()` is engine-independent and uses
 | `internal/providers/yandex/` | Parse Yandex result page (most fragile, see Pitfalls) | `yandex.go` |
 | `internal/readability/` | Noise-stripping + container-scoring content extractor for `Fetch()` | `readability.go` |
 | `examples/basic/` | Runnable usage example | `main.go` |
-| `testdata/` | Captured real block pages + synthetic success fixtures per provider | `*/blocked.html`, `*/success.html` |
+| `testdata/` | Captured real block/success pages + synthetic fixtures per provider | `*/blocked.html`, `*/success.html`, `*/real_success.html` |
+| `docs/` | Human-readable API reference + architecture doc (companions to `go doc`, not a replacement) | `API.md`, `ARCHITECTURE.md` |
 
 ### Entry Points
 
