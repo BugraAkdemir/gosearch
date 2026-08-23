@@ -26,7 +26,7 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// endpoint is Yandex's web search URL. It accepts the query as the text
+// Endpoint is Yandex's web search URL. It accepts the query as the text
 // parameter and returns server-rendered organic-result markup. It is a var,
 // not a const, so tests can point Search at a local httptest server.
 var Endpoint = "https://yandex.com/search/"

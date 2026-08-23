@@ -22,9 +22,9 @@ import (
 	"github.com/BugraAkdemir/gosearch/internal/serrors"
 )
 
-// endpoint is DuckDuckGo's no-JS HTML search endpoint. It accepts the query as
-// the q parameter and returns server-rendered result markup. It is a var, not a
-// const, so tests can point Search at a local httptest server.
+// Endpoint is DuckDuckGo's no-JS HTML search endpoint. It accepts the query
+// as the q parameter and returns server-rendered result markup. It is a var,
+// not a const, so tests can point Search at a local httptest server.
 var Endpoint = "https://html.duckduckgo.com/html/"
 
 // Search queries DuckDuckGo for query and returns up to maxResults results

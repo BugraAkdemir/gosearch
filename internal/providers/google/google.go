@@ -27,9 +27,10 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// endpoint is Google's web search URL. It accepts the query as the q parameter
-// and returns server-rendered result markup to non-JS clients. It is a var,
-// not a const, so tests can point Search at a local httptest server.
+// Endpoint is Google's web search URL. It accepts the query as the q
+// parameter and returns server-rendered result markup to non-JS clients. It
+// is a var, not a const, so tests can point Search at a local httptest
+// server.
 var Endpoint = "https://www.google.com/search"
 
 // Search queries Google for query and returns up to maxResults results
