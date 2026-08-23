@@ -32,8 +32,12 @@ const maxSearchResults = 30
 // returns an error wrapping gosearch.ErrChallenge rather than empty results,
 // so callers can distinguish "no answers" from "engine refused".
 func (e *Engine) Search(ctx context.Context, query string) ([]gosearch.Result, error) {
+	e.warmUp(ctx)
+
 	// Navigate, clear Google's cookie-consent interstitial when it appears
 	// (a normal visitor clicks "Accept"; so do we), then wait for results.
+	// No hl/num overrides: default locale and result count look like an
+	// ordinary visit, which is exactly the point.
 	var raw string
 	err := e.run(ctx, searchTimeout,
 		chromedp.Navigate(googleSearchURL(query)),
@@ -109,7 +113,7 @@ func usableDestination(rawURL string) bool {
 
 // googleSearchURL builds the desktop search URL the engine navigates to.
 func googleSearchURL(query string) string {
-	return "https://www.google.com/search?q=" + url.QueryEscape(query) + "&hl=en&num=20"
+	return "https://www.google.com/search?q=" + url.QueryEscape(query)
 }
 
 // classifyRenderError maps chromedp failures onto gosearch's sentinel

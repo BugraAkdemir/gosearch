@@ -63,6 +63,39 @@ discovery-or-download without building an Engine — call it in a Dockerfile
 user request. `browser.WithCacheDir(path)` points storage somewhere writable
 when the default user-cache location is read-only (locked-down containers).
 
+
+### When Google serves its `/sorry` CAPTCHA
+
+`Search` reports exactly where the tab landed when it fails, e.g.
+`landed on: https://www.google.com/sorry/...` — that is Google's
+IP-reputation CAPTCHA, which no tool here will auto-solve. The legitimate
+escape hatch is **you** solving it once, in a persistent profile:
+
+```go
+// 1) once, headed — click the CAPTCHA yourself, then close:
+e, _ := browser.New(ctx,
+	browser.AllowDownload(true),
+	browser.WithProfileDir("/home/me/.gosearch-profile"),
+	browser.WithHeadless(false),
+)
+e.Search(ctx, "warm up") // solve by hand in the window; Ctrl+C after
+
+// 2) from now on, headless with the same profile reuses that session:
+e2, _ := browser.New(ctx,
+	browser.AllowDownload(true),
+	browser.WithProfileDir("/home/me/.gosearch-profile"),
+)
+defer e2.Close()
+```
+
+Related knobs: `WithUserAgent(ua)` overrides the declared identity string —
+by default the engine declares a standard desktop Chrome UA (the same
+realistic-identity policy as the core HTTP client) instead of
+chrome-headless-shell's `HeadlessChrome`; webdriver flags and fingerprints
+stay untouched. Searches also warm up on the homepage first and use
+Google's default locale/result-count (no bot-ish `num=20`), because ordinary
+flow is precisely what keeps the wall away.
+
 ## Where the executable comes from
 
 Resolution order in `New`:

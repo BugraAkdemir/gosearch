@@ -27,6 +27,32 @@ type engineConfig struct {
 	// the normalized default (a standard desktop Chrome UA — see
 	// normalizedUserAgent).
 	userAgent string
+	// headless is the resolved headless mode. The zero value must not force
+	// headed, so headlessSeen records whether the caller expressed a choice.
+	headless     bool
+	headlessSeen bool
+	// profileDir persists cookies/history across Engine instances when set
+	// (e.g. solve a CAPTCHA once in headed mode, keep the session). When
+	// empty, each Engine gets a throwaway temp profile.
+	profileDir string
+	// keepProfile marks a user-supplied profileDir as persistent (never
+	// deleted by Close).
+	keepProfile bool
+}
+
+// WithHeadless controls whether the browser runs headlessly (default true,
+// i.e. headless). WithHeadless(false) opens a visible window — useful once,
+// with WithProfileDir, to manually clear an interactive challenge so the
+// saved session carries over to later headless runs.
+func WithHeadless(v bool) Option {
+	return func(c *engineConfig) { c.headless = v; c.headlessSeen = true }
+}
+
+// WithProfileDir uses a persistent browser profile at path: cookies survive
+// Close() and across runs. The directory is created if missing and is NOT
+// deleted by Close.
+func WithProfileDir(path string) Option {
+	return func(c *engineConfig) { c.profileDir = path; c.keepProfile = true }
 }
 
 // WithUserAgent sets the exact User-Agent string the browser declares.
@@ -105,13 +131,13 @@ func normalizedUserAgent(ua string) string {
 // instead of probing PATH itself. The browser itself is NEVER patched or
 // disguised beyond the declared UA — see the package comment for the project
 // line on anti-bot behavior.
-func allocatorFlags(profileDir, executable, userAgent string) []chromedp.ExecAllocatorOption {
+func allocatorFlags(profileDir, executable, userAgent string, headless bool) []chromedp.ExecAllocatorOption {
 	base := chromedp.DefaultExecAllocatorOptions[:]
 	extra := []chromedp.ExecAllocatorOption{
 		chromedp.ExecPath(executable),
-		chromedp.Flag("headless", true),
-		chromedp.Flag("user-agent", normalizedUserAgent(userAgent)),
+		chromedp.Flag("headless", headless),
 		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("user-agent", normalizedUserAgent(userAgent)),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("no-first-run", true),
 		chromedp.Flag("no-default-browser-check", true),

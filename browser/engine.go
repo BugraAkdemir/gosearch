@@ -10,11 +10,13 @@
 //
 // Honest limitations (the line this project will not cross): the browser is
 // driven UNMODIFIED — no stealth patches, no navigator.webdriver masking, no
-// fingerprint spoofing. That means it clears JavaScript-gated pages but does
-// NOT defeat IP-reputation blocks or interactive CAPTCHAs, and automated-
-// browser signals remain detectable. When an engine still refuses to serve
-// results, this package reports ErrChallenge/ErrBlocked-wrapped errors like
-// the rest of gosearch instead of pretending otherwise.
+// fingerprint spoofing. The only identity adjustment is a standard desktop
+// Chrome User-Agent string (same policy as the core HTTP client); webdriver
+// stays on and everything else stays stock. That means the engine clears
+// JavaScript-gated pages but does NOT defeat IP-reputation blocks or
+// interactive CAPTCHAs. When an engine still refuses to serve results, this
+// package reports ErrChallenge/ErrBlocked-wrapped errors like the rest of
+// gosearch instead of pretending otherwise.
 package browser
 
 import (
@@ -38,6 +40,9 @@ type Engine struct {
 	profileDir    string
 	executable    string
 	userAgent     string
+	runHeadless   bool
+	keepProfile   bool
+	warmed        sync.Once
 	startOnce     sync.Once
 	startErr      error
 	closeOnce     sync.Once
@@ -58,11 +63,29 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 	if err != nil {
 		return nil, err
 	}
-	profile, err := os.MkdirTemp("", "gosearch-browser-")
-	if err != nil {
-		return nil, fmt.Errorf("browser: create profile dir: %w", err)
+
+	headless := !cfg.headlessSeen || cfg.headless
+	var profile string
+	if cfg.keepProfile {
+		if err := os.MkdirAll(cfg.profileDir, 0o755); err != nil {
+			return nil, fmt.Errorf("browser: create profile dir: %w", err)
+		}
+		profile = cfg.profileDir
+	} else {
+		p, err := os.MkdirTemp("", "gosearch-browser-")
+		if err != nil {
+			return nil, fmt.Errorf("browser: create profile dir: %w", err)
+		}
+		profile = p
 	}
-	return &Engine{executable: exe, profileDir: profile, userAgent: normalizedUserAgent(cfg.userAgent)}, nil
+
+	return &Engine{
+		executable:  exe,
+		profileDir:  profile,
+		userAgent:   normalizedUserAgent(cfg.userAgent),
+		runHeadless: headless,
+		keepProfile: cfg.keepProfile,
+	}, nil
 }
 
 // Executable reports the resolved chromium-family binary path. Valid before
@@ -77,7 +100,8 @@ func (e *Engine) start(parent context.Context) error {
 		lifetime, stopLifetime := context.WithCancel(context.WithoutCancel(parent))
 		e.stop = stopLifetime
 
-		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime, allocatorFlags(e.profileDir, e.executable, e.userAgent)...)
+		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime,
+			allocatorFlags(e.profileDir, e.executable, e.userAgent, e.runHeadless)...)
 		e.stopAllocator = stopAllocator
 		tabCtx, _ := chromedp.NewContext(allocCtx)
 		if err := chromedp.Run(tabCtx); err != nil {
@@ -103,9 +127,24 @@ func (e *Engine) run(ctx context.Context, timeout time.Duration, actions ...chro
 	return chromedp.Run(callCtx, actions...)
 }
 
-// Close shuts the browser down and removes the temporary profile directory.
-// It is idempotent; calling methods on a closed Engine surfaces the original
-// startup error or a canceled-context error from chromedp.
+// warmUp navigates Google's homepage once per Engine so the session picks up
+// ordinary first-visit cookies before the first search — the natural human
+// flow (open site, then search). Best-effort: failures are ignored and never
+// retried; the search itself reports any real problem.
+func (e *Engine) warmUp(_ context.Context) {
+	e.warmed.Do(func() {
+		dctx, cancel := context.WithTimeout(e.ctx, 15*time.Second)
+		defer cancel()
+		_ = chromedp.Run(dctx,
+			chromedp.Navigate("https://www.google.com/"),
+			chromedp.WaitReady("body", chromedp.ByQuery),
+		)
+	})
+}
+
+// Close shuts the browser down. Throwaway profile directories are removed;
+// user-supplied persistent ones (WithProfileDir) are kept — that is the whole
+// point of them. Idempotent.
 func (e *Engine) Close() error {
 	e.closeOnce.Do(func() {
 		if e.stopAllocator != nil {
@@ -114,7 +153,9 @@ func (e *Engine) Close() error {
 		if e.stop != nil {
 			e.stop()
 		}
-		_ = os.RemoveAll(e.profileDir)
+		if !e.keepProfile {
+			_ = os.RemoveAll(e.profileDir)
+		}
 	})
 	return nil
 }
