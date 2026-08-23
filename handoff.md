@@ -81,6 +81,34 @@ ok  	github.com/BugraAkdemir/gosearch/internal/readability	(cached)
 
 ---
 
+## Session 2, leg 3 (same day) — docs/ (API reference + architecture)
+
+User asked for `docs/` + confirmed CI was already in place. Added:
+
+- `docs/API.md` — human-readable companion to `go doc -all .`: Search/Fetch
+  contracts, all Option/Engine/Result/Page/error semantics, in one page.
+- `docs/ARCHITECTURE.md` — package graph, why the `internal/serrors` and
+  `internal/provider` split exists (import-cycle avoidance), Search/Fetch
+  request flow, block-detection order-of-checks, and a Provider status table.
+
+Both are explicitly framed as companions to `go doc`, not replacements —
+source doc comments stay authoritative. Linked both from `README.md`'s new
+"Documentation" section and added a `docs/` row to `AGENTS.md`'s Module Map.
+
+**Commit:** `edd4b4d` on `main`, local only (5 commits ahead of origin now:
+`bd179a0`, `b45f413`, `bf9c5a0`, `3192d37`, `edd4b4d`). Still not pushed —
+user has twice declined to push this session; ask again next session rather
+than assuming.
+
+**Verification:** `go build/vet/gofmt/test -race` all green (no code
+changed, docs-only commit).
+
+**Next Session:** same three items as leg 2's handoff (push decision,
+golangci-lint format unverified until real CI run, Google/Yandex still
+blocked on their own real captures) — nothing new opened this leg.
+
+---
+
 # Handoff — 2026-08-23 (Session 2) — Finish Phase 1 (example, CI, lint config)
 
 ## Summary
