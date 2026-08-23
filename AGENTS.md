@@ -88,9 +88,11 @@ CI: GitHub Actions (`.github/workflows/ci.yml`) runs `go build`, `go vet`,
 
 ### Release
 
-No release process yet (pre-v0.1). When one exists: tag `vX.Y.Z` on `main`;
-`go get` + `proxy.golang.org` handle distribution automatically (no separate
-publish step).
+Releases are annotated tags `vX.Y.Z` on `main`, pushed together with the
+branch (`git push origin main --follow-tags`). There is no separate publish
+step: once the tag is public, `go get` + `proxy.golang.org` handle
+distribution automatically. First release: v0.1.0, cut 2026-08-23 after
+Phases 1–4 (Phase 5 remains optional/unbuilt).
 
 **Hard rule:** never push a git tag / cut a release without the user
 explicitly asking for it in that specific moment — a tag is public and

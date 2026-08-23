@@ -11,11 +11,12 @@ readable content out of any URL — title and main body text, with
 navigation/ads/footers stripped — for feeding page content into something
 like an LLM agent's context.
 
-> **Status: Phase 3 (pre-v0.1).** All three providers (`DuckDuckGo`,
-> `Google`, `Yandex`) plus `Fetch()` are implemented. DuckDuckGo is validated
-> against a real captured page; Google and Yandex parsers are documented
-> best-effort heuristics pending real-capture validation — see
-> [`plan.md`](./plan.md) and `AGENTS.md`'s Known Pitfalls.
+> **Status: v0.1.** All three providers (`DuckDuckGo`, `Google`, `Yandex`)
+> plus `Fetch()` are implemented and hardened (transient-failure retries,
+> ordered fallback chain). DuckDuckGo is validated against a real captured
+> page; the Google and Yandex parsers are documented best-effort heuristics
+> pending real-capture validation — see [`plan.md`](./plan.md) and
+> `AGENTS.md`'s Known Pitfalls.
 
 ---
 
