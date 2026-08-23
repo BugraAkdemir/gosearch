@@ -30,6 +30,68 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3 (2026-08-23) — CI-vs-residential question answered; Phase 2 (Google) built and green
+
+The user asked whether Google/Yandex real-success validation could be done on
+CI instead of switching networks. Answer delivered with evidence: a throwaway
+`.capture/main.go` probe (written, used, deleted — not committed) hit both
+engines live from this sandbox — Google returned the `enablejs` JS-challenge
+with HTTP 200, Yandex 302'd to `showcaptcha`, same as 2026-07-29. GitHub
+Actions runners are datacenter IPs too (worse reputation), so a live-capture
+CI job would not produce success fixtures either. The residential requirement
+is one-time manual capture only (curl or DevTools response copy from any
+trusted network → `testdata/<engine>/real_success.html`); all validation
+afterwards is offline in CI by design.
+
+Since the plan explicitly decouples provider code from the pending capture,
+Phase 2 was implemented this session:
+
+- `internal/providers/google/` (`google.go` + `google_test.go`):
+  `/url?q=` redirect decoding, h3-inside-or-wrapping-link title heuristic,
+  container-scoped snippet lookup (g/xpd/Gx5Zad/MjjYud classes, s3v9rd/st
+  snippet blocks), dedup + pagination-link filtering, maxResults cap,
+  ErrNoResults convention identical to DuckDuckGo's.
+- `testdata/google/success.html`: synthetic modern basic-HTML fixture;
+  legacy `h3.r > a` + `span.st` shape covered by an inline test case.
+- `TestParseRealSuccessFixture` pre-wired for the future residential
+  capture; skips while `testdata/google/real_success.html` is absent.
+- Latent bug found & fixed: `TestSearchNotImplementedEngines` in
+  `orchestration_test.go` called the REAL dispatch for engines without
+  providers and was safe only because `errNotImplemented` short-circuited
+  pre-HTTP; wiring Google made it hit the live web in unit tests (observed as
+  a 1.1s test that received a real challenge page). Restricted to Yandex with
+  a warning comment.
+- Dispatch wired in `gosearch.go`; stale doc comments updated; README,
+  `docs/API.md`, `plan.md` (Phase 2 items ticked), AGENTS.md pitfalls
+  (re-probe logged) updated in the same change.
+
+**Commit:** `cccd447 feat(providers): google` on main (plus the docs commit
+carrying this entry).
+
+**Verification (pasted):**
+
+```
+$ go build ./... && go vet ./... && gofmt -l . && go test -race ./...
+ok  	github.com/BugraAkdemir/gosearch	(cached)
+?  	github.com/BugraAkdemir/gosearch/examples/basic	[no test files]
+?  	github.com/BugraAkdemir/gosearch/internal/htmlx	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	(cached)
+?  	github.com/BugraAkdemir/gosearch/internal/provider	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	(cached)
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/google	(cached)
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	(cached)
+?  	github.com/BugraAkdemir/gosearch/internal/serrors	[no test files]
+```
+(gofmt printed nothing; golangci-lint not installed locally — CI runs it.)
+
+**Next Session:** Phase 3 — build `internal/providers/yandex` against the
+`serp-item`/organic-result heuristic with a mocked `showcaptchafast` 302 +
+synthetic success fixture (no real blocked fixture needed, see plan.md).
+Independent of that: whenever a trusted-network capture of Google's basic
+result HTML lands at `testdata/google/real_success.html`,
+`TestParseRealSuccessFixture` activates and closes Phase 2's exit criterion;
+adjust the heuristic if the real markup diverges (expected in some details).
+
 ## Session 2, leg 2 (same day) — Live validation closes Phase 1's real exit criterion
 
 After the leg below, the user asked me to actually run the example myself
