@@ -30,6 +30,57 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 2, leg 2 (same day) — Live validation closes Phase 1's real exit criterion
+
+After the leg below, the user asked me to actually run the example myself
+rather than hand it off. `go run ./examples/basic` succeeded from this
+session's sandbox against the live `html.duckduckgo.com/html/` endpoint: a
+clean HTTP 200 with 10 real results for "facebook", no captcha/anomaly
+markup — a different outcome than the 2026-07-29 design-phase finding that
+all three engines blocked this project's sandbox on first contact (see
+`AGENTS.md` Known Pitfalls). Captured the real response body via a
+throwaway `.capture/main.go` (written, used, then deleted — never
+committed) and saved it as `testdata/duckduckgo/real_success.html`. Added
+`TestParseRealSuccessFixture` in `duckduckgo_test.go` asserting structural
+properties (10 results, non-empty Title/URL, uddg redirects decoded,
+`results[0].URL == "https://www.facebook.com/"`) against the real capture —
+deliberately not asserting exact snippet prose, since that can drift on a
+future re-capture even though the markup shape stays stable.
+
+Checked the captured HTML for anything sensitive before committing it
+(grepped for `vqd=`, `token`, `session` — none found) since it's a
+real server response now permanently in git history.
+
+Updated `AGENTS.md`'s Known Pitfalls with a dated note that DuckDuckGo is
+now re-validated (Google/Yandex are not — that part of the original finding
+still stands) and checked off `plan.md`'s Phase 1 exit-criteria line.
+
+**Commit:** `bf9c5a0` on `main`, local only (3 commits ahead of origin now:
+`bd179a0`, `b45f413`, `bf9c5a0`). Not pushed — need to ask the user before
+pushing, per the standing rule about actions visible to others.
+
+**Verification:**
+```
+$ go build ./... && go vet ./... && gofmt -l . && go test -race ./...
+ok  	github.com/BugraAkdemir/gosearch	(cached)
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	(cached)
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.019s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	(cached)
+```
+
+**Next Session:**
+1. Ask the user whether to push `bd179a0`/`b45f413`/`bf9c5a0` to
+   `origin/main` — still not done.
+2. `golangci-lint` config (`.golangci.yml`, v2 format) is still unverified
+   locally — first real CI run on GitHub will tell if the format guess
+   (`golangci-lint-action@v6` + `version: latest` → v2 binary) was right.
+3. Google/Yandex providers (Phase 2/3) remain correctly blocked on a real,
+   non-datacenter-blocked capture of *their* success pages — DuckDuckGo's
+   success here doesn't transfer to them; each engine needs its own real
+   capture before its parser is trusted.
+
+---
+
 # Handoff — 2026-08-23 (Session 2) — Finish Phase 1 (example, CI, lint config)
 
 ## Summary
