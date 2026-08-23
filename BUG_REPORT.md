@@ -5,7 +5,7 @@
 > and `AGENTS.md`'s Known Pitfalls section. This file's only job is: *what's
 > still broken, right now, today.*
 >
-> **Last updated:** 2026-07-29 — pre-v0.1, Phase 1 in progress. No open bugs.
+> **Last updated:** 2026-08-23 — pre-v0.1, Phases 1–3 shipped, Phase 4 hardening in progress. No open bugs.
 
 ---
 

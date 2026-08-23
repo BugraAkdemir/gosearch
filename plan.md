@@ -110,16 +110,16 @@ see Phase 2/3 exit criteria below.
 
 ## Phase 4 — Hardening
 
-- [ ] Retry/backoff policy on transient (non-block) failures
-- [ ] Confirm `WithFallback` end-to-end: primary engine returns
+- [x] Retry/backoff policy on transient (non-block) failures
+- [x] Confirm `WithFallback` end-to-end: primary engine returns
       `ErrBlocked`/`ErrChallenge` → next engine in the caller-supplied list is
       tried in order → first success wins → if all fail, return
       `errors.Join` of every engine's error so the caller can see exactly
       what happened per engine
-- [ ] Document in README: expected reliability per engine, how to supply a
+- [x] Document in README: expected reliability per engine, how to supply a
       custom cookie jar/proxy, and the explicit non-goal (no captcha
       solving/JS execution/proxy rotation — ever)
-- [ ] Final pass on `AGENTS.md`/`BUG_REPORT.md` to reflect actual shipped
+- [x] Final pass on `AGENTS.md`/`BUG_REPORT.md` to reflect actual shipped
       state instead of Phase-1-era assumptions
 
 ## Phase 5 — Optional `gosearch/browser` subpackage (real-browser rendering)

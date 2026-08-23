@@ -30,6 +30,58 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3, leg 3 (same day) — Phase 4 (Hardening) complete; only Phase 5 optional remains
+
+Phase 4 items, all verified:
+
+- **Retry/backoff** (`4ef3e52`): `httpclient.Get` refactored into a retry
+  loop (`getOnce` per attempt) over transport errors and HTTP 408/5xx,
+  doubling backoff capped at 5s; every attempt passes the per-host rate
+  limiter; ctx cancellation never retried. A request ending on a transient
+  status now returns an error instead of handing a server-error page to a
+  parser. Blocks/challenges deliberately NOT retried (deterministic for IP
+  reputation; fallback's job). Root option `WithRetries(n)` — default 2,
+  `0`/negative disables. Tests: transient-then-success, give-up-after-N,
+  no-retry-on-403, disabled-retries, backoffFor table, root option clamping.
+- **WithFallback end-to-end** (`d7efa3b`): new `internal/e2e` package runs
+  public API → dispatch → REAL providers against httptest servers. Requires
+  each provider's endpoint var to be exported (`endpoint` → `Endpoint`,
+  internal-only surface change done via ast_edit across 6 files). Confirms:
+  primary blocked → next engine succeeds and later engines are never
+  consulted; all engines blocked → errors.Join preserves both ErrBlocked
+  and ErrChallenge through errors.Is.
+- **Docs**: README "Tuning and escape hatches" (retries/proxy/cookies/
+  custom client) + explicit non-goals section; `docs/API.md` options table
+  gained `WithRetries`.
+- **Final pass**: AGENTS.md Known Open Work refreshed (Phases 1–3 shipped,
+  Phase 4 active), BUG_REPORT.md last-updated line current, plan.md Phase 4
+  boxes ticked.
+
+**Verification (pasted):**
+
+```
+$ go build ./... && go vet ./... && gofmt -l . ; go test -race -count=1 ./...
+ok  	github.com/BugraAkdemir/gosearch	1.041s
+ok  	github.com/BugraAkdemir/gosearch/internal/e2e	1.059s
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.444s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.057s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/google	1.064s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/yandex	1.054s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	1.029s
+(htmlx/provider/serrors: no test files; gofmt printed nothing)
+```
+
+**Commits:** `4ef3e52 feat(httpclient)`, `d7efa3b test(e2e)`, plus this docs
+commit.
+
+**Next Session:** v0.1 core roadmap is DONE through Phase 4. Remaining work
+is either (a) user-supplied real captures for Google/Yandex
+(`testdata/{google,yandex}/real_success.html` — regression tests self-activate
+and close those exit criteria), or (b) optional Phase 5 `gosearch/browser`
+subpackage (separate module/build tag; read plan.md's full design first).
+A release process decision (tagging v0.1) needs explicit user ask — see the
+hard rule in AGENTS.md.
+
 ## Session 3, leg 2 (same day) — Phase 3 (Yandex) built; all engines wired
 
 Continued straight down plan.md into Phase 3. `internal/providers/yandex/`

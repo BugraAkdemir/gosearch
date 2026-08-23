@@ -207,8 +207,12 @@ must be addressed before claiming done.
 ## Known Open Work
 
 Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't
-duplicate that list here. As of 2026-07-29 it has 0 open items (pre-v0.1,
-Phase 1 in progress).
+duplicate that list here. As of 2026-08-23: 0 open items; Phases 1–3 are
+shipped (all three engines implemented and wired), Phase 4 hardening is the
+active phase. Still open from the Phase 2/3 exit criteria: real success-page
+captures from a trusted network for Google (`testdata/google/
+real_success.html`) and Yandex (`testdata/yandex/real_success.html`) — the
+pre-wired regression tests activate on their own once the files land.
 
 ---
 
