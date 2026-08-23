@@ -132,6 +132,26 @@ network:
 | Google | Moderate | No official no-JS endpoint; DOM is regionally A/B tested and changes without notice. |
 | Yandex | Lowest | Very aggressive geo/IP-based captcha gating, especially outside Russia. |
 
+### Tuning and escape hatches
+
+- **Retries:** transient failures (network errors, HTTP 408/5xx) are retried
+  with exponential backoff — default 2 retries, `gosearch.WithRetries(n)` to
+  change it, `WithRetries(0)` to disable. Blocks and challenges are never
+  retried; that is what fallback is for.
+- **Proxy / egress:** `gosearch.WithProxy("socks5://host:port")` routes every
+  request through your own proxy.
+- **Session reuse:** `WithCookies(...)` seeds cookies (for example exported
+  from your own browser) so a request looks like a returning visitor.
+- **Full control:** `WithHTTPClient(client)` uses your own `*http.Client`
+  as-is; you then own headers, jar, transport, and rate limiting.
+
+### Explicit non-goals
+
+This library will **never** solve CAPTCHAs, execute JS challenges, mask
+`navigator.webdriver`, rotate proxies to hide identity, or otherwise defeat
+a security control. It behaves like an ordinary visitor and reports honestly
+when an engine blocks it — anything beyond that is out of scope by design.
+
 This isn't sold as "always works" — see [`plan.md`](./plan.md) for exactly
 how each provider's block-detection and fallback behavior is meant to work,
 and `AGENTS.md`'s Known Pitfalls log for what's actually been verified

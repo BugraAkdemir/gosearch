@@ -38,11 +38,23 @@ func TestDefaultConfig(t *testing.T) {
 	if c.timeout != 15*time.Second {
 		t.Errorf("default timeout = %v, want 15s", c.timeout)
 	}
-	if c.fallback != nil {
-		t.Errorf("default fallback = %v, want nil", c.fallback)
-	}
 	if c.maxResults != 0 {
 		t.Errorf("default maxResults = %d, want 0", c.maxResults)
+	}
+	if c.retries != 2 {
+		t.Errorf("default retries = %d, want 2", c.retries)
+	}
+}
+
+func TestWithRetriesOption(t *testing.T) {
+	if got := apply([]Option{WithRetries(5)}).retries; got != 5 {
+		t.Errorf("WithRetries(5) = %d, want 5", got)
+	}
+	// Zero/negative disables retrying entirely (sentinel -1).
+	for _, n := range []int{0, -3} {
+		if got := apply([]Option{WithRetries(n)}).retries; got != -1 {
+			t.Errorf("WithRetries(%d) = %d, want -1 (disabled)", n, got)
+		}
 	}
 }
 

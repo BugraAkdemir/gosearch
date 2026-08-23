@@ -171,3 +171,120 @@ func TestBodyIsCapped(t *testing.T) {
 		t.Errorf("body len = %d, want <= maxBodyBytes (%d)", len(resp.Body), maxBodyBytes)
 	}
 }
+
+// fastClient builds a client with retry backoff and rate-limit spacing small
+// enough that retry tests do not slow the suite.
+func fastClient(t *testing.T, maxRetries int) *Client {
+	t.Helper()
+	c, err := New(Config{
+		MaxRetries:   maxRetries,
+		RetryBackoff: time.Millisecond,
+		MinInterval:  time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestGetRetriesTransientStatusThenSucceeds(t *testing.T) {
+	var count int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count++
+		if count <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	resp, err := fastClient(t, 2).Get(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("Get after transient 503s: %v", err)
+	}
+	if resp.StatusCode != 200 || string(resp.Body) != "ok" {
+		t.Fatalf("unexpected response: %d %q", resp.StatusCode, resp.Body)
+	}
+	if count != 3 {
+		t.Errorf("server hit %d times, want 3 (initial + 2 retries)", count)
+	}
+}
+
+func TestGetGivesUpAfterMaxRetries(t *testing.T) {
+	var count int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count++
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer srv.Close()
+
+	_, err := fastClient(t, 2).Get(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("Get on persistent 502 = nil error, want error")
+	}
+	if !strings.Contains(err.Error(), "502") {
+		t.Errorf("error = %v, want it to mention HTTP 502", err)
+	}
+	if count != 3 {
+		t.Errorf("server hit %d times, want exactly 3", count)
+	}
+}
+
+// TestGetDoesNotRetryBlocks pins the policy that anti-bot rejections are
+// never retried: a block is deterministic for the caller's IP reputation, so
+// the first answer must be final (fallback engines exist for this case).
+func TestGetDoesNotRetryBlocks(t *testing.T) {
+	var count int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count++
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer srv.Close()
+
+	resp, err := fastClient(t, 2).Get(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("Get on 403: %v", err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("status = %d, want 403 passed through untouched", resp.StatusCode)
+	}
+	if count != 1 {
+		t.Errorf("server hit %d times, want exactly 1 (no retries on blocks)", count)
+	}
+}
+
+func TestGetNegativeMaxRetriesDisablesRetry(t *testing.T) {
+	var count int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		count++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	_, err := fastClient(t, -1).Get(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatal("Get with retries disabled = nil error, want error")
+	}
+	if count != 1 {
+		t.Errorf("server hit %d times, want exactly 1", count)
+	}
+}
+
+func TestBackoffForDoublesAndCaps(t *testing.T) {
+	base := 100 * time.Millisecond
+	cases := []struct {
+		n    int
+		want time.Duration
+	}{
+		{1, 100 * time.Millisecond},
+		{2, 200 * time.Millisecond},
+		{3, 400 * time.Millisecond},
+		{10, maxBackoff}, // capped
+	}
+	for _, tc := range cases {
+		if got := backoffFor(base, tc.n); got != tc.want {
+			t.Errorf("backoffFor(base, %d) = %v, want %v", tc.n, got, tc.want)
+		}
+	}
+}

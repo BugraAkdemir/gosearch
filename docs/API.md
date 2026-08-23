@@ -112,6 +112,7 @@ variadic args, applied in the order given.
 | `WithHTTPClient(client *http.Client)` | Both | Escape hatch: uses your `*http.Client` as-is, bypassing this library's default headers/cookie jar/rate limiting entirely. `WithTimeout`/`WithProxy`/`WithHeader` are **not** layered on top when this is set. |
 | `WithFallback(engines ...Engine)` | Search only | Ordered fallback chain, engaged only on `ErrBlocked`/`ErrChallenge`. Ignored by `Fetch`. |
 | `WithMaxResults(n int)` | Search only | Caps returned results. `0` (default) = no cap. Ignored by `Fetch`. |
+| `WithRetries(n int)` | Both | Transient failures (transport errors, HTTP 408/5xx) are retried with exponential backoff. Default `2`; `0`/negative disables. Blocks/challenges (`ErrBlocked`/`ErrChallenge`) are never retried — use `WithFallback` for those. |
 
 ## Errors
 

@@ -36,6 +36,10 @@ type config struct {
 	// maxResults caps the number of results returned; 0 means no cap.
 	// Search-only.
 	maxResults int
+	// retries is how many times a transiently failing request (transport
+	// error, HTTP 408/5xx) is retried before the failure is final. Blocks
+	// are never retried. -1 disables retrying entirely.
+	retries int
 }
 
 // defaultConfig returns the baseline configuration used before any Option is
@@ -44,6 +48,7 @@ func defaultConfig() *config {
 	return &config{
 		timeout:      15 * time.Second,
 		extraHeaders: http.Header{},
+		retries:      2,
 	}
 }
 
@@ -129,5 +134,20 @@ func WithMaxResults(n int) Option {
 			n = 0
 		}
 		c.maxResults = n
+	}
+}
+
+// WithRetries sets how many times a transiently failing request — transport
+// error or HTTP 408/5xx — is retried with exponential backoff before the
+// failure is final. The default is 2; passing 0 or a negative number disables
+// retrying entirely. Blocks and challenges (ErrBlocked/ErrChallenge) are
+// never retried — they are deterministic for the caller's IP reputation, and
+// WithFallback exists for them.
+func WithRetries(n int) Option {
+	return func(c *config) {
+		if n <= 0 {
+			n = -1 // httpclient's "negative disables" sentinel
+		}
+		c.retries = n
 	}
 }

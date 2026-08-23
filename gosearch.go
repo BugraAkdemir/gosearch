@@ -113,6 +113,7 @@ func newHTTPClient(cfg *config) (*httpclient.Client, error) {
 		ExtraHeaders: cfg.extraHeaders,
 		Cookies:      cfg.cookies,
 		HTTPClient:   cfg.httpClient,
+		MaxRetries:   cfg.retries,
 	})
 }
 

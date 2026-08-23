@@ -51,15 +51,28 @@ type Config struct {
 	// enforced across all requests made through this Client. Zero means 1
 	// second. Meaningful only when a Client is reused across multiple requests.
 	MinInterval time.Duration
+	// MaxRetries is how many times a request that fails TRANSIENTLY —
+	// transport error or HTTP 408/500/502/503/504 — is retried before Get
+	// gives up. Zero means the default of 2; a negative value disables
+	// retries entirely. Blocks and challenges (403/429, captcha pages) are
+	// deliberately never retried: they are deterministic for the caller's
+	// IP reputation, and hammering an engine that already flagged you only
+	// makes things worse — use gosearch.WithFallback for those.
+	MaxRetries int
+	// RetryBackoff is the delay before the first retry, doubling on each
+	// further attempt (capped at 5 seconds). Zero means 500 milliseconds.
+	RetryBackoff time.Duration
 }
 
 // Client is a reusable HTTP client with browser-like defaults, a cookie jar,
 // and per-host rate limiting. It is safe for concurrent use.
 type Client struct {
-	http        *http.Client
-	userAgent   string
-	extra       http.Header
-	minInterval time.Duration
+	http         *http.Client
+	userAgent    string
+	extra        http.Header
+	minInterval  time.Duration
+	maxRetries   int
+	retryBackoff time.Duration
 
 	mu       sync.Mutex
 	lastHost map[string]time.Time
@@ -81,6 +94,11 @@ func New(cfg Config) (*Client, error) {
 	minInterval := cfg.MinInterval
 	if minInterval <= 0 {
 		minInterval = time.Second
+	}
+	maxRetries := cfg.MaxRetries
+	retryBackoff := cfg.RetryBackoff
+	if retryBackoff <= 0 {
+		retryBackoff = 500 * time.Millisecond
 	}
 
 	hc := cfg.HTTPClient
@@ -130,11 +148,13 @@ func New(cfg Config) (*Client, error) {
 	}
 
 	return &Client{
-		http:        hc,
-		userAgent:   ua,
-		extra:       cfg.ExtraHeaders,
-		minInterval: minInterval,
-		lastHost:    map[string]time.Time{},
+		http:         hc,
+		userAgent:    ua,
+		extra:        cfg.ExtraHeaders,
+		minInterval:  minInterval,
+		maxRetries:   maxRetries,
+		retryBackoff: retryBackoff,
+		lastHost:     map[string]time.Time{},
 	}, nil
 }
 
@@ -150,7 +170,48 @@ type Response struct {
 // Get fetches rawURL with the client's browser-like headers, honoring ctx and
 // the per-host rate limit. It reads and returns the (bounded) body. It does not
 // perform block detection — call Detect on the returned Response for that.
+//
+// Transient failures — transport errors (other than ctx cancellation) and
+// HTTP 408/500/502/503/504 — are retried with exponential backoff up to the
+// configured MaxRetries; every attempt still passes through rateLimit. A
+// request that ends on a transient status returns an error rather than a
+// Response, so a server-error page can never reach a parser. Blocks
+// (403/429) and challenge pages are never retried.
 func (c *Client) Get(ctx context.Context, rawURL string) (*Response, error) {
+	attempts := c.maxRetries + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+
+	var lastErr error
+	for attempt := range attempts {
+		if attempt > 0 {
+			if err := sleepCtx(ctx, backoffFor(c.retryBackoff, attempt)); err != nil {
+				return nil, lastErr // ctx done while backing off; keep original failure
+			}
+		}
+		resp, err := c.getOnce(ctx, rawURL)
+		switch {
+		case err == nil:
+			if !transientStatus(resp.StatusCode) {
+				return resp, nil
+			}
+			lastErr = fmt.Errorf("httpclient: get %q: HTTP %d", rawURL, resp.StatusCode)
+		case ctx.Err() != nil:
+			// The caller gave up; retrying would only spin uselessly.
+			return nil, fmt.Errorf("httpclient: get %q: %w", rawURL, err)
+		default:
+			lastErr = fmt.Errorf("httpclient: get %q: %w", rawURL, err)
+		}
+	}
+	if lastErr == nil { // unreachable when attempts >= 1, but be explicit
+		lastErr = fmt.Errorf("httpclient: get %q: all attempts failed", rawURL)
+	}
+	return nil, lastErr
+}
+
+// getOnce performs exactly one rate-limited request and reads its body.
+func (c *Client) getOnce(ctx context.Context, rawURL string) (*Response, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("httpclient: parse url %q: %w", rawURL, err)
@@ -186,6 +247,41 @@ func (c *Client) Get(ctx context.Context, rawURL string) (*Response, error) {
 		Header:     resp.Header,
 		Body:       body,
 	}, nil
+}
+
+// transientStatus reports whether an HTTP status code is worth retrying:
+// request timeout (408) and the server-side gateway/upstream failures
+// (500/502/503/504). Everything else is either an answer or a block.
+func transientStatus(code int) bool {
+	return code == 408 || code == 500 || code == 502 || code == 503 || code == 504
+}
+
+// backoffFor returns the wait before retry number n (1-based): the configured
+// base doubled per attempt, capped at maxBackoff.
+const maxBackoff = 5 * time.Second
+
+func backoffFor(base time.Duration, n int) time.Duration {
+	d := base
+	for i := 1; i < n && d < maxBackoff; i++ {
+		d *= 2
+	}
+	if d > maxBackoff {
+		return maxBackoff
+	}
+	return d
+}
+
+// sleepCtx waits for d or until ctx is done, whichever comes first. It
+// returns ctx.Err() when the context ended first.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 // rateLimit blocks until at least minInterval has elapsed since the last
