@@ -30,6 +30,26 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3, leg 5 (same day) — post-release CI failure caught and fixed forward
+
+Checking CI after the v0.1.0 push surfaced a red run: golangci-lint (revive)
+rejected the lowercase doc comments on the newly exported `Endpoint` vars in
+all three provider packages ("comment on exported var Endpoint should be of
+the form 'Endpoint ...'"). Cosmetic only — no code behavior — but main was
+red on top of a published release.
+
+**Decision:** fix forward; never move/retag a published tag (proxy pins by
+hash, and AGENTS.md treats tags as effectively permanent). v0.1.0 remains
+valid: it builds, tests green, and the finding is doc-comment style.
+
+- Fix: `9fbbbba fix(lint): capitalize Endpoint var doc comments` → CI run
+  #8 SUCCESS (verified via `gh run list`; api.github.com was flaky from this
+  sandbox mid-session — the Actions web page worked as fallback evidence).
+- **golangci-lint v2.13.1 is NOW INSTALLED LOCALLY** at
+  `$(go env GOPATH)/bin/golangci-lint` — future sessions must include
+  `golangci-lint run` in the verification pass (AGENTS.md always said "if
+  installed locally"; it is now).
+
 ## Session 3, leg 4 (same day) — v0.1.0 tagged, pushed, published
 
 The user explicitly authorized the tag/release in this moment (satisfying the
