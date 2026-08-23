@@ -30,6 +30,96 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+# Handoff — 2026-08-23 (Session 2) — Finish Phase 1 (example, CI, lint config)
+
+## Summary
+
+Picked up exactly where Session 1 left off: the three remaining Phase 1
+checklist items in `plan.md` (`examples/basic/main.go`, CI workflow,
+`.golangci.yml`). No architecture or API changes — this session only adds
+scaffolding around the already-implemented core.
+
+**Commit status:** `bd179a0` on `main`, not yet pushed to origin. Working
+tree clean otherwise.
+
+## What Was Done
+
+- `examples/basic/main.go` — runnable demo: `Search` on DuckDuckGo, prints
+  results, then `Fetch`es the first result's URL and prints the extracted
+  title/content. Distinguishes `ErrBlocked`/`ErrChallenge` from other errors
+  per the pattern documented in `errors.go`. Not run against the live
+  network this session (see Next Session #1 — needs a residential IP).
+- `.github/workflows/ci.yml` — runs on push to `main` and on PRs: checkout,
+  `actions/setup-go@v5` (go 1.25), `go build ./...`, `go vet ./...`, a
+  `gofmt -l .` check that fails the job on any output,
+  `golangci/golangci-lint-action@v6` (version: latest), `go test -race ./...`.
+- `.golangci.yml` — written in **v2 config format** (`version: "2"`,
+  `linters.default: standard` + explicit `enable` list: errcheck, govet,
+  ineffassign, staticcheck, unused, gocritic, revive; `formatters.enable`:
+  gofmt, goimports). Chose v2 format because `golangci-lint-action@v6` with
+  `version: latest` currently resolves to a golangci-lint v2.x binary.
+  **Not verified locally** — `golangci-lint` is not installed on this
+  machine (see Next Session #2).
+- `plan.md` — checked off the three items above plus the Phase 1 tests
+  checkbox, which was actually already satisfied by Session 1's work
+  (`client_test.go`, `detect_test.go`, `duckduckgo_test.go`,
+  `readability_test.go` all exist and pass) but had been left unchecked.
+
+## Verification
+
+```bash
+$ go build ./...      # (no output = ok)
+$ go vet ./...         # (no output = ok)
+$ gofmt -l .           # (no output = all formatted)
+$ go test -race ./...
+ok  	github.com/BugraAkdemir/gosearch	1.017s
+?   	github.com/BugraAkdemir/gosearch/examples/basic	[no test files]
+?   	github.com/BugraAkdemir/gosearch/internal/htmlx	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.390s
+?   	github.com/BugraAkdemir/gosearch/internal/provider	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.022s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	1.015s
+?   	github.com/BugraAkdemir/gosearch/internal/serrors	[no test files]
+```
+
+**NOT verified:**
+- `golangci-lint run` was not run locally (tool not installed) — the
+  `.golangci.yml` syntax is untested until either it's installed locally or
+  the CI workflow actually runs on GitHub. If the v6 action resolves to a
+  v1.x binary instead of v2.x for any reason, this config's `version: "2"` /
+  `linters.default` / `formatters` block will fail to parse and the lint job
+  will need a v1-format rewrite (`linters.disable-all` + explicit
+  `enable`, no `formatters` section, `gofmt`/`goimports` listed directly
+  under `linters.enable` instead).
+- `examples/basic` was not actually run (`go run ./examples/basic`) — no
+  live network validation this session. This is still the single most
+  important outstanding gap carried over from Session 1.
+- No push to `origin/main` yet — commit `bd179a0` is local only.
+
+## Next Session
+
+1. **Highest priority, carried over from Session 1 twice now:** run
+   `go run ./examples/basic` from a real residential IP (not this sandbox)
+   to confirm DuckDuckGo returns real results, then capture that real
+   response HTML as a `testdata/duckduckgo/` regression fixture so
+   `parse()` is validated against reality instead of only the synthetic
+   fixture. This is Phase 1's actual exit criterion per `plan.md` line 82-83
+   and has not been done in either session.
+2. **Verify CI actually runs green on GitHub** once pushed — first real PR
+   or push to `main` will reveal whether `golangci-lint-action@v6` +
+   `version: latest` picks v1 or v2, and whether `.golangci.yml` needs the
+   format rewrite noted above. Push `bd179a0` (and get user confirmation
+   first, since pushing affects the shared remote).
+3. **Then Phase 2 (Google provider)** — still blocked on having a real,
+   non-datacenter-blocked Google success page to write the parser against;
+   do not start this until #1 above produces (or a separate residential
+   capture provides) that fixture.
+4. Nothing was deliberately descoped this session beyond what Session 1
+   already deferred (Google/Yandex providers, Phase 4/5) — this was a
+   narrowly-scoped "finish the Phase 1 checklist" session.
+
+---
+
 # Handoff — 2026-07-29 (Session 1) — Project bootstrap + Phase 1 core (skeleton, httpclient, DuckDuckGo, readability, orchestration)
 
 ## Summary
