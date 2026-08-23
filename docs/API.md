@@ -5,6 +5,11 @@ source are the source of truth (`go doc github.com/BugraAkdemir/gosearch` or
 `go doc -all .` from the repo root always reflects the current code). This
 file exists for readers who'd rather browse one page than run a command.
 
+New here? Start with [GETTING_STARTED.md](./GETTING_STARTED.md) for a
+from-zero walkthrough, or [RECIPES.md](./RECIPES.md) for task-oriented
+copy-paste solutions. Internal design lives in
+[ARCHITECTURE.md](./ARCHITECTURE.md).
+
 ## `Search`
 
 ```go
@@ -49,9 +54,10 @@ navigation/ads/boilerplate stripped) into a `Page`.
 
 - Does **not** run JavaScript. A page whose content is rendered entirely
   client-side will yield an empty `Page.Content` — this is a known,
-  permanent limitation of plain-HTTP fetching, not a bug to work around here
-  (see [Phase 5 / the planned `gosearch/browser` subpackage](ARCHITECTURE.md#planned-gosearchbrowser-phase-5)
-  for the opt-in real-browser answer to this).
+  permanent limitation of plain-HTTP fetching, not a bug to work around here.
+  The opt-in real-browser answer is the separate
+  [`gosearch/browser`](../browser/README.md) module — see
+  [the browser recipe](./RECIPES.md#when-plain-http-is-not-enough-the-browser-engine).
 - Returns `ErrBlocked`/`ErrChallenge` if the server responds with an
   anti-bot page instead of real content.
 - `WithFallback` and `WithMaxResults` are Search-only options; `Fetch`

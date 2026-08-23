@@ -192,6 +192,11 @@ Full phased build-out, exit criteria, and design rationale live in
 
 ## Documentation
 
+- [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md) — from zero to first
+  search and first extracted page: install, quickstart, engine primer.
+- [`docs/RECIPES.md`](./docs/RECIPES.md) — task-oriented, copy-paste recipes:
+  fallback chains, error-handling patterns, retries/proxy/cookies/custom
+  client, batch searching, the browser engine, troubleshooting.
 - [`docs/API.md`](./docs/API.md) — human-readable API reference (`go doc -all .` is the source of truth; this is a companion, not a replacement).
 - [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) — package graph, request flow, and the reasoning behind the `internal/` split.
 
