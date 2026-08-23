@@ -8,12 +8,13 @@ import (
 	"github.com/BugraAkdemir/gosearch/internal/httpclient"
 	"github.com/BugraAkdemir/gosearch/internal/provider"
 	"github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo"
+	"github.com/BugraAkdemir/gosearch/internal/providers/google"
 	"github.com/BugraAkdemir/gosearch/internal/readability"
 	"github.com/BugraAkdemir/gosearch/internal/serrors"
 )
 
-// errNotImplemented is returned for engines that are defined but whose provider
-// is not built yet (Google and Yandex, planned for later phases — see plan.md).
+// errNotImplemented is returned for engines that are defined but whose
+// provider is not built yet (Yandex, planned for a later phase — see plan.md).
 // It is intentionally unexported and temporary; it does not participate in
 // fallback (only ErrBlocked/ErrChallenge do).
 var errNotImplemented = errors.New("gosearch: provider not implemented yet")
@@ -31,9 +32,9 @@ var errNotImplemented = errors.New("gosearch: provider not implemented yet")
 // The same underlying HTTP client (with its cookie jar and rate limiter) is
 // reused across the fallback chain.
 //
-// Note: as of this version only DuckDuckGo is implemented. Google and Yandex
-// are defined engines but their providers are not built yet and return an
-// error; see plan.md.
+// Note: as of this version DuckDuckGo and Google are implemented; Yandex is a
+// defined engine whose provider is not built yet and returns an error; see
+// plan.md.
 func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([]Result, error) {
 	if !engine.valid() {
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedEngine, int(engine))
@@ -70,7 +71,9 @@ var dispatch = func(ctx context.Context, e Engine, client *httpclient.Client, qu
 	switch e {
 	case DuckDuckGo:
 		return duckduckgo.Search(ctx, client, query, maxResults)
-	case Google, Yandex:
+	case Google:
+		return google.Search(ctx, client, query, maxResults)
+	case Yandex:
 		return nil, fmt.Errorf("%w: %s (planned, see plan.md)", errNotImplemented, e)
 	default:
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedEngine, int(e))

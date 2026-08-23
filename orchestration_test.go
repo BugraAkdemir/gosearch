@@ -29,8 +29,12 @@ func TestSearchUnsupportedEngine(t *testing.T) {
 	}
 }
 
+// TestSearchNotImplementedEngines calls the REAL dispatch table, so every
+// engine named here must be one whose provider does not exist yet: the
+// errNotImplemented path returns before any HTTP request is made. Listing an
+// implemented engine would make this unit test hit the live web.
 func TestSearchNotImplementedEngines(t *testing.T) {
-	for _, e := range []Engine{Google, Yandex} {
+	for _, e := range []Engine{Yandex} {
 		_, err := Search(context.Background(), "q", e)
 		if !errors.Is(err, errNotImplemented) {
 			t.Errorf("Search(%v) err = %v, want errNotImplemented", e, err)

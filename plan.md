@@ -85,10 +85,10 @@ see Phase 2/3 exit criteria below.
 
 ## Phase 2 — Google provider
 
-- [ ] `internal/providers/google` — parses the classic `/url?q=...&` link +
+- [x] `internal/providers/google` — parses the classic `/url?q=...&` link +
       adjacent `<h3>` heuristic (documented as best-effort; Google's DOM is
       regionally A/B tested and changes without notice)
-- [ ] Unit tests against the real captured JS-challenge fixture
+- [x] Unit tests against the real captured JS-challenge fixture
       (`testdata/google/blocked.html`, captured 2026-07-29) + a synthetic
       success fixture matching the heuristic
 - **Exit criteria:** same as Phase 1, plus — once the user has run this from

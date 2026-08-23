@@ -127,6 +127,14 @@ effectively permanent on the Go module proxy once fetched.
   validated against real markup, not only the synthetic fixture. This
   satisfies the Phase 1 exit criterion in `plan.md`. Google/Yandex are still
   unvalidated against a real success page — that finding stands.
+- **Google/Yandex re-probed 2026-08-23 (Session 3):** still blocked from this
+  sandbox — Google again served the `enablejs` JS-challenge page with HTTP
+  200, Yandex again 302'd to `showcaptcha`. CI won't help either: GitHub
+  Actions runners are datacenter IPs with worse reputation. The real-success
+  capture remains a one-time manual step from a trusted network; drop the
+  file at `testdata/google/real_success.html` and the pre-wired
+  `TestParseRealSuccessFixture` in `google_test.go` activates automatically
+  (it skips itself while the file is absent).
 
 ### Security
 - Block-detection markers (header names, redirect substrings, marker CSS

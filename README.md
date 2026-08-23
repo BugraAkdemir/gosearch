@@ -11,9 +11,9 @@ readable content out of any URL — title and main body text, with
 navigation/ads/footers stripped — for feeding page content into something
 like an LLM agent's context.
 
-> **Status: Phase 1 (pre-v0.1).** The DuckDuckGo provider and `Fetch()` are
-> implemented and tested; Google and Yandex are defined engines but their
-> providers are not built yet (they currently return an error) — see
+> **Status: Phase 2 (pre-v0.1).** The DuckDuckGo and Google providers plus
+> `Fetch()` are implemented and tested; Yandex is a defined engine but its
+> provider is not built yet (it currently returns an error) — see
 > [`plan.md`](./plan.md) for the phased build-out and current progress.
 
 ---
@@ -71,7 +71,7 @@ go get github.com/BugraAkdemir/gosearch
 No API key, no config file, no signup required to use the plain-HTTP
 provider (`Google`, `Yandex`, `DuckDuckGo`).
 
-## Usage (planned API)
+## Usage
 
 ```go
 package main
@@ -87,7 +87,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Search DuckDuckGo (the implemented engine today).
+	// Search DuckDuckGo (most reliable) or Google (best-effort — see below).
 	results, err := gosearch.Search(ctx, "facebook", gosearch.DuckDuckGo)
 	if err != nil {
 		log.Fatal(err)
@@ -106,8 +106,8 @@ func main() {
 }
 ```
 
-Once the Google and Yandex providers land (Phase 2/3), you'll be able to set
-a primary engine and fall back automatically when it's blocked:
+Google is wired the same way; with `WithFallback` a block/challenge on the
+primary engine automatically tries the next one (Yandex lands in Phase 3):
 
 ```go
 // Try Google first; fall back to DuckDuckGo, then Yandex, on a block/challenge.
