@@ -50,3 +50,28 @@ const fetchExtractJS = `(() => {
   for (const [el, next] of removed.reverse()) { el.parentNode && el.parentNode.insertBefore(el, next); }
   return JSON.stringify({ title: document.title || '', url: location.href, content: text });
 })()`
+
+// pageStateJS reports where the tab currently is: final URL and title.
+// Used for consent detection and for enriching failure diagnostics.
+const pageStateJS = `(() => JSON.stringify({
+  url: location.href,
+  title: document.title || ''
+}))()`
+
+// consentAcceptClickJS clicks Google's cookie-consent accept button. The
+// button is matched by visible text across common locales because Google
+// renders it with rotating generated classes. Returns whether a click fired.
+const consentAcceptClickJS = `(() => {
+  const rx = /(accept all|i agree|kabul et|hepsini kabul|alle akzeptieren|tout accepter|aceptar todo|accettare tutto|同意|принять)/i;
+  const candidates = document.querySelectorAll('button, div[role="button"], form[action*="consent"] button');
+  for (const el of candidates) {
+    if (rx.test((el.innerText || el.textContent || '').trim())) {
+      el.click();
+      return true;
+    }
+  }
+  // Last resort: any consent form's primary submit.
+  const form = document.querySelector('form[action*="consent"]');
+  if (form) { const b = form.querySelector('button'); if (b) { b.click(); return true; } }
+  return false;
+})()`

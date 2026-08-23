@@ -23,6 +23,21 @@ type engineConfig struct {
 	// downloaded/embedded engine and its extraction (locked-down containers,
 	// read-only HOME, etc.).
 	cacheDir string
+	// userAgent overrides the User-Agent the browser declares. Empty means
+	// the normalized default (a standard desktop Chrome UA — see
+	// normalizedUserAgent).
+	userAgent string
+}
+
+// WithUserAgent sets the exact User-Agent string the browser declares.
+// By default chrome-headless-shell advertises "HeadlessChrome", which search
+// engines treat as an automation-only build and answer differently; the
+// default here is a standard desktop Chrome UA instead — the same
+// realistic-identity policy the core HTTP client already applies. Nothing
+// else about the browser is altered: webdriver stays on, fingerprints stay
+// stock, CAPTCHAs are never solved.
+func WithUserAgent(ua string) Option {
+	return func(c *engineConfig) { c.userAgent = ua }
 }
 
 // WithExecutable bypasses all discovery and uses the given chromium-family
@@ -69,17 +84,33 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 		strings.Join(discoverCandidates(), ", "))
 }
 
+// normalizedUserAgent returns the User-Agent the browser declares. chrome-
+// headless-shell advertises "HeadlessChrome" by default, which engines treat
+// as an automation-only build and answer differently; the default here is a
+// standard desktop Chrome UA — the same realistic-identity policy the core
+// HTTP client applies. An explicit non-empty ua wins verbatim. Nothing else
+// about the browser is altered (webdriver stays on, fingerprints stay stock).
+func normalizedUserAgent(ua string) string {
+	if ua != "" {
+		return ua
+	}
+	return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+		"(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+}
+
 // allocatorFlags keeps per-instance consumption low and behavior stable:
-// no GPU process, no images (search pages are text), a small window, and a
-// private profile directory. The resolved executable is pinned explicitly so
-// chromedp launches OUR binary instead of probing PATH itself. The browser
-// itself is NEVER patched or disguised — see the package comment for the
-// project line on anti-bot behavior.
-func allocatorFlags(profileDir, executable string) []chromedp.ExecAllocatorOption {
+// no GPU process, no images (search pages are text), a small window, a
+// private profile directory, and a normal browser identity string. The
+// resolved executable is pinned explicitly so chromedp launches OUR binary
+// instead of probing PATH itself. The browser itself is NEVER patched or
+// disguised beyond the declared UA — see the package comment for the project
+// line on anti-bot behavior.
+func allocatorFlags(profileDir, executable, userAgent string) []chromedp.ExecAllocatorOption {
 	base := chromedp.DefaultExecAllocatorOptions[:]
 	extra := []chromedp.ExecAllocatorOption{
 		chromedp.ExecPath(executable),
 		chromedp.Flag("headless", true),
+		chromedp.Flag("user-agent", normalizedUserAgent(userAgent)),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
 		chromedp.Flag("no-first-run", true),

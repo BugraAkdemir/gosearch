@@ -32,14 +32,18 @@ const maxSearchResults = 30
 // returns an error wrapping gosearch.ErrChallenge rather than empty results,
 // so callers can distinguish "no answers" from "engine refused".
 func (e *Engine) Search(ctx context.Context, query string) ([]gosearch.Result, error) {
+	// Navigate, clear Google's cookie-consent interstitial when it appears
+	// (a normal visitor clicks "Accept"; so do we), then wait for results.
 	var raw string
 	err := e.run(ctx, searchTimeout,
 		chromedp.Navigate(googleSearchURL(query)),
+		chromedp.ActionFunc(dismissConsentIfNeeded),
 		chromedp.WaitVisible("h3", chromedp.ByQuery),
 		chromedp.Evaluate(searchExtractJS, &raw),
 	)
 	if err != nil {
-		return nil, classifyRenderError("search", err)
+		diag := e.pageDiagnostics(ctx)
+		return nil, classifyRenderError("search", err, diag)
 	}
 
 	var raws []renderResult
@@ -111,14 +115,47 @@ func googleSearchURL(query string) string {
 // classifyRenderError maps chromedp failures onto gosearch's sentinel
 // vocabulary: a missing h3 after a successful navigation almost always means
 // a consent wall, captcha, or challenge — ErrChallenge — while transport-
-// level failures surface as-is.
-func classifyRenderError(op string, err error) error {
+// level failures surface as-is. The landed-on URL and page title are appended
+// when reachable so a failing run reports WHERE the engine ended up instead
+// of a bare timeout.
+func classifyRenderError(op string, err error, diag string) error {
 	if err == nil {
 		return nil
 	}
 	if strings.Contains(err.Error(), "context deadline exceeded") ||
 		strings.Contains(err.Error(), "h3 not found") {
-		return fmt.Errorf("browser: %s: no result markup appeared (likely consent wall or captcha): %w", op, gosearch.ErrChallenge)
+		msg := "no result markup appeared (likely consent wall or captcha)"
+		if diag != "" {
+			msg += "; landed on: " + diag
+		}
+		return fmt.Errorf("browser: %s: %s: %w", op, msg, gosearch.ErrChallenge)
 	}
 	return fmt.Errorf("browser: %s: %w", op, err)
+}
+
+// pageDiagnostics best-effort captures where the tab actually is (final URL
+// + document title) for error reporting. Never fails the caller: any problem
+// yields an empty string.
+func (e *Engine) pageDiagnostics(_ context.Context) string {
+	var raw string
+	dctx, cancel := context.WithTimeout(e.ctx, 3*time.Second)
+	defer cancel()
+	if err := chromedp.Run(dctx, chromedp.Evaluate(pageStateJS, &raw)); err != nil || raw == "" {
+		return ""
+	}
+	var st struct {
+		URL   string `json:"url"`
+		Title string `json:"title"`
+	}
+	if json.Unmarshal([]byte(raw), &st) != nil {
+		return ""
+	}
+	switch {
+	case st.URL != "" && st.Title != "":
+		return st.URL + " (" + st.Title + ")"
+	case st.URL != "":
+		return st.URL
+	default:
+		return ""
+	}
 }

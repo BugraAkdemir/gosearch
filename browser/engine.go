@@ -37,6 +37,7 @@ type Engine struct {
 	stopAllocator context.CancelFunc
 	profileDir    string
 	executable    string
+	userAgent     string
 	startOnce     sync.Once
 	startErr      error
 	closeOnce     sync.Once
@@ -61,7 +62,7 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("browser: create profile dir: %w", err)
 	}
-	return &Engine{executable: exe, profileDir: profile}, nil
+	return &Engine{executable: exe, profileDir: profile, userAgent: normalizedUserAgent(cfg.userAgent)}, nil
 }
 
 // Executable reports the resolved chromium-family binary path. Valid before
@@ -76,7 +77,7 @@ func (e *Engine) start(parent context.Context) error {
 		lifetime, stopLifetime := context.WithCancel(context.WithoutCancel(parent))
 		e.stop = stopLifetime
 
-		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime, allocatorFlags(e.profileDir, e.executable)...)
+		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime, allocatorFlags(e.profileDir, e.executable, e.userAgent)...)
 		e.stopAllocator = stopAllocator
 		tabCtx, _ := chromedp.NewContext(allocCtx)
 		if err := chromedp.Run(tabCtx); err != nil {

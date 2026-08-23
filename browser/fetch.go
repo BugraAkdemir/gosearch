@@ -35,7 +35,7 @@ func (e *Engine) Fetch(ctx context.Context, rawURL string) (*gosearch.Page, erro
 		chromedp.Evaluate(fetchExtractJS, &raw),
 	)
 	if err != nil {
-		return nil, classifyRenderError("fetch", err)
+		return nil, classifyRenderError("fetch", err, e.pageDiagnostics(ctx))
 	}
 
 	var page struct {
