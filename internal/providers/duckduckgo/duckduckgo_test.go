@@ -60,6 +60,39 @@ func TestParseSuccessFixture(t *testing.T) {
 	}
 }
 
+// TestParseRealSuccessFixture guards against silent parser breakage against
+// DuckDuckGo's actual markup. Unlike TestParseSuccessFixture (a small
+// synthetic page), real_success.html is a real response captured 2026-08-23
+// from a residential IP for the query "facebook" (see AGENTS.md's Known
+// Pitfalls — Session 1 had only ever validated parse() against synthetic
+// markup). It only asserts structural properties (count, non-empty fields,
+// decoded URLs), not exact snippet text, since a live capture's prose can
+// drift on re-capture even though the markup shape stays stable.
+func TestParseRealSuccessFixture(t *testing.T) {
+	doc, err := html.Parse(strings.NewReader(string(fixture(t, "real_success.html"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := parse(doc, 0)
+	if len(results) != 10 {
+		t.Fatalf("got %d results, want 10", len(results))
+	}
+	for i, r := range results {
+		if r.Title == "" {
+			t.Errorf("result[%d].Title is empty", i)
+		}
+		if r.URL == "" {
+			t.Errorf("result[%d].URL is empty", i)
+		}
+		if strings.Contains(r.URL, "duckduckgo.com/l/") {
+			t.Errorf("result[%d].URL = %q, want uddg redirect decoded to real destination", i, r.URL)
+		}
+	}
+	if got, want := results[0].URL, "https://www.facebook.com/"; got != want {
+		t.Errorf("result[0].URL = %q, want %q", got, want)
+	}
+}
+
 func TestParseMaxResults(t *testing.T) {
 	doc, _ := html.Parse(strings.NewReader(string(fixture(t, "success.html"))))
 	if got := parse(doc, 2); len(got) != 2 {

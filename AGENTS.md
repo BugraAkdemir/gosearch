@@ -117,6 +117,15 @@ effectively permanent on the Go module proxy once fetched.
 - Google's result DOM is regionally A/B tested and changes without notice —
   any parser here is inherently best-effort. Don't treat a parse miss as
   necessarily a bug in our code; capture the actual HTML first.
+- **DuckDuckGo re-validated 2026-08-23:** `go run ./examples/basic` against
+  the live endpoint from this session's environment returned a clean 200
+  with 10 real results for "facebook" — no captcha/anomaly markup this time
+  (contrast with the 2026-07-29 finding above). The real response HTML is
+  captured as `testdata/duckduckgo/real_success.html` and parsed by
+  `TestParseRealSuccessFixture` in `duckduckgo_test.go`, so `parse()` is now
+  validated against real markup, not only the synthetic fixture. This
+  satisfies the Phase 1 exit criterion in `plan.md`. Google/Yandex are still
+  unvalidated against a real success page — that finding stands.
 
 ### Security
 - Block-detection markers (header names, redirect substrings, marker CSS

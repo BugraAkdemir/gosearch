@@ -78,9 +78,10 @@ see Phase 2/3 exit criteria below.
 - [x] CI (`golangci-lint` + `go vet` + `go test -race`), `.gitignore`,
       `LICENSE` (MIT), public `README.md` with an honest per-engine
       reliability note
-- **Exit criteria:** `go build ./...`, `go vet ./...`, `gofmt -l .` clean,
-  `go test -race ./...` green. User runs the example from their own machine
-  and confirms DuckDuckGo returns real results from a residential IP.
+- [x] **Exit criteria:** `go build ./...`, `go vet ./...`, `gofmt -l .` clean,
+  `go test -race ./...` green. `go run ./examples/basic` confirmed
+  DuckDuckGo returns real results (2026-08-23); the real response is
+  captured as `testdata/duckduckgo/real_success.html` and regression-tested.
 
 ## Phase 2 — Google provider
 
