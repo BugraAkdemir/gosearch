@@ -30,6 +30,33 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 3, leg 4 (same day) — v0.1.0 tagged, pushed, published
+
+The user explicitly authorized the tag/release in this moment (satisfying the
+hard rule in AGENTS.md). Steps taken:
+
+- Pre-release doc refresh first (`552190a`): README status block → "Status:
+  v0.1", AGENTS.md Release section now documents the actual process
+  (annotated tag on main, `git push origin main --follow-tags`, no separate
+  publish step) instead of "no release process yet".
+- Full verification suite re-run green right before tagging.
+- Annotated tag `v0.1.0` created on the docs commit; pushed with main.
+- Go module proxy triggered + verified via escaped path
+  `proxy.golang.org/github.com/!bugra!akdemir/gosearch/@v/v0.1.0.info` →
+  returned Version v0.1.0, Hash 552190a9… (the exact tagged commit). Note:
+  unescaped module paths in proxy URLs return "invalid escaped module path"
+  because of the capitals in the owner name.
+- GitHub release published with notes:
+  https://github.com/BugraAkdemir/gosearch/releases/tag/v0.1.0
+
+**State:** v0.1.0 is public and effectively permanent on the Go module proxy.
+pkg.go.dev will index it automatically.
+
+**Next Session:** nothing blocking v0.1. Remaining candidates: (a) user-supplied
+Google/Yandex real captures to close those exit criteria, (b) optional Phase 5
+`gosearch/browser` subpackage, (c) any post-release issues surfaced by early
+users. Do not retag/re-cut releases without an explicit fresh user ask.
+
 ## Session 3, leg 3 (same day) — Phase 4 (Hardening) complete; only Phase 5 optional remains
 
 Phase 4 items, all verified:
