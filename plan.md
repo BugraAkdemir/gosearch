@@ -100,10 +100,10 @@ see Phase 2/3 exit criteria below.
 
 ## Phase 3 — Yandex provider
 
-- [ ] `internal/providers/yandex` — parses `serp-item` / organic-result
+- [x] `internal/providers/yandex` — parses `serp-item` / organic-result
       heuristic (documented as the most fragile of the three, per the
       anti-bot findings above)
-- [ ] Unit tests against a mocked 302-to-`showcaptchafast` response (no real
+- [x] Unit tests against a mocked 302-to-`showcaptchafast` response (no real
       fixture needed — the redirect + header signature is enough to test
       block-detection) + a synthetic success fixture
 - **Exit criteria:** same shape as Phase 2.

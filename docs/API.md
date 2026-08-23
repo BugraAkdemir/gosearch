@@ -13,15 +13,14 @@ func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([
 
 Queries `engine` for `query` and returns parsed results.
 
-- **As of this version, `DuckDuckGo` and `Google` are implemented.** `Yandex`
-  is a defined `Engine` constant but calling `Search` with it currently
-  returns an error — see [`plan.md`](../plan.md) for the phased rollout and
-  why (short version: a parser is not trusted until it's been validated
-  against a real, non-blocked capture of that engine's success page — see
-  `AGENTS.md`'s Known Pitfalls). The Google parser is best-effort by design:
-  Google serves its basic-HTML result page only to clients it trusts, and its
-  DOM changes without notice, so a parse miss is not necessarily a bug —
-  capture the actual HTML first.
+- **All three engines (`DuckDuckGo`, `Google`, `Yandex`) are implemented.**
+  Reliability differs sharply per engine and per network: DuckDuckGo's parser
+  is validated against a real captured success page, while the Google and
+  Yandex parsers are best-effort heuristics —
+  those engines serve result markup only to clients they trust and change
+  their DOM without notice, so a parse miss is not necessarily a bug; capture
+  the actual HTML first (see [`plan.md`](../plan.md) and `AGENTS.md`'s Known
+  Pitfalls).
 - `WithFallback` engines are tried, in order, **only** when the current
   engine returns `ErrBlocked` or `ErrChallenge`. A successful-but-empty
   result (`ErrNoResults`) does **not** trigger fallback — an empty result is

@@ -1,0 +1,52 @@
+<!doctype html>
+<!--
+  Synthetic Yandex success fixture. Modeled on the server-rendered organic
+  result markup: li.serp-item containers, a.organic__url links with h2 titles,
+  div.organic__text snippets. Includes the link variants the parser must
+  handle (direct https href, protocol-relative href) and the internal links it
+  must skip (relative /search/ pagination, undecodable /clck/ click-tracker).
+-->
+<html>
+<head><title>facebook — found by Yandex</title></head>
+<body>
+<ul id="search-result" role="main">
+  <li class="serp-item" data-cid="111">
+    <div class="organic">
+      <a class="organic__url" href="https://www.facebook.com/" target="_blank">
+        <h2 class="OrganicTitle-LinkText">Facebook — log in or sign up</h2>
+      </a>
+      <span class="organic__subtitle">https://www.facebook.com</span>
+      <div class="organic__text"><span>Log into Facebook to start sharing and connecting with your friends, family and people you know.</span></div>
+    </div>
+  </li>
+  <li class="serp-item" data-cid="222">
+    <div class="organic">
+      <a class="organic__url" href="//en.wikipedia.org/wiki/Facebook" target="_blank">
+        <h2 class="OrganicTitle-LinkText">Facebook - Wikipedia</h2>
+      </a>
+      <div class="organic__text">Facebook is an online social media and social networking service owned by Meta Platforms.</div>
+    </div>
+  </li>
+  <li class="serp-item" data-cid="333">
+    <div class="organic">
+      <a class="organic__url" href="https://www.facebook.com/login/" target="_blank">
+        <h2 class="OrganicTitle-LinkText">Log into Facebook</h2>
+      </a>
+    </div>
+  </li>
+  <!-- relative search-pagination link: must be skipped -->
+  <li class="serp-item" data-cid="444">
+    <div class="organic">
+      <a class="organic__url" href="/search/?text=facebook&amp;page=2"><h2>Next page</h2></a>
+      <div class="organic__text">pager</div>
+    </div>
+  </li>
+  <!-- clck click-tracker without decodable target: must be skipped -->
+  <li class="serp-item" data-cid="555">
+    <div class="organic">
+      <a class="organic__url" href="https://yandex.com/clck/redirect?redircnt=1787511703"><h2>Sponsored listing</h2></a>
+    </div>
+  </li>
+</ul>
+</body>
+</html>

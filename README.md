@@ -11,10 +11,11 @@ readable content out of any URL — title and main body text, with
 navigation/ads/footers stripped — for feeding page content into something
 like an LLM agent's context.
 
-> **Status: Phase 2 (pre-v0.1).** The DuckDuckGo and Google providers plus
-> `Fetch()` are implemented and tested; Yandex is a defined engine but its
-> provider is not built yet (it currently returns an error) — see
-> [`plan.md`](./plan.md) for the phased build-out and current progress.
+> **Status: Phase 3 (pre-v0.1).** All three providers (`DuckDuckGo`,
+> `Google`, `Yandex`) plus `Fetch()` are implemented. DuckDuckGo is validated
+> against a real captured page; Google and Yandex parsers are documented
+> best-effort heuristics pending real-capture validation — see
+> [`plan.md`](./plan.md) and `AGENTS.md`'s Known Pitfalls.
 
 ---
 
@@ -106,8 +107,8 @@ func main() {
 }
 ```
 
-Google is wired the same way; with `WithFallback` a block/challenge on the
-primary engine automatically tries the next one (Yandex lands in Phase 3):
+With `WithFallback` a block/challenge on the primary engine automatically
+tries the next one:
 
 ```go
 // Try Google first; fall back to DuckDuckGo, then Yandex, on a block/challenge.

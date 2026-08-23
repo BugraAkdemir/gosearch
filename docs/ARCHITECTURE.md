@@ -40,9 +40,6 @@ control — see the "Reliability" section of the package doc comment in
     internal/serrors  — sentinel errors, imported by root + providers + httpclient
     internal/provider — the Result{Title,URL,Snippet} shape providers return
 ```
-\* Google and Yandex are defined `Engine` constants but have no provider
-package yet — dispatching to them returns an unexported not-implemented
-error. See [Provider status](#provider-status) below.
 
 ## Why the internal split
 
@@ -132,8 +129,8 @@ never be hand-edited or "cleaned up."
 | Engine | Status | Why |
 |---|---|---|
 | DuckDuckGo | Implemented, tested against a real capture | Only engine with an official no-JS HTML endpoint; validated 2026-08-23 (`testdata/duckduckgo/real_success.html`) |
-| Google | Not implemented | Only a blocked/challenge capture exists (`testdata/google/blocked.html`); parser will not be written until a real success page is captured from a non-datacenter IP, per the project rule against trusting a parser written blind against documented-but-unverified markup |
-| Yandex | Not implemented | No capture at all yet — most aggressive anti-bot gating of the three, per design-phase findings |
+| Google | Implemented, heuristic only — pending real-capture validation | Written against the documented basic-HTML markup (`/url?q=` redirects + h3 titles) and tested on synthetic + real-blocked fixtures; a real success page from a trusted network must still land at `testdata/google/real_success.html`, where `TestParseRealSuccessFixture` activates automatically |
+| Yandex | Implemented, heuristic only — pending real-capture validation | Most aggressive anti-bot gating of the three (sandbox is 302'd to showcaptcha); same synthetic-fixture + skip-until-capture pattern as Google, targeting `testdata/yandex/real_success.html` |
 
 ## Planned: `gosearch/browser` (Phase 5)
 
