@@ -158,7 +158,11 @@ go test -race ./...
 ```
 
 If `golangci-lint` is installed locally, also run `golangci-lint run`; CI
-runs it regardless.
+runs it regardless. CI pins `golangci-lint` to `v2.13.1` via
+`golangci-lint-action@v9` (`.github/workflows/ci.yml`) — `golangci-lint-action@v6`
+hard-rejects any v2.x `golangci-lint` version, so don't downgrade the action
+without also downgrading `.golangci.yml` back to v1 format, or vice versa;
+they must move together.
 
 Acceptable pre-existing noise: none currently. Any new vet/lint/test failure
 must be addressed before claiming done.

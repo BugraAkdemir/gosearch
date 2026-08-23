@@ -81,6 +81,98 @@ ok  	github.com/BugraAkdemir/gosearch/internal/readability	(cached)
 
 ---
 
+## Session 2, leg 4 (same day) — Pushed; CI actually failed twice, now genuinely green; Google/Yandex re-confirmed blocked
+
+User asked to proceed to the next step, then approved pushing. What
+actually happened once real CI ran (this is why "should pass" claims
+without running it are worthless — see AGENTS.md rule #3):
+
+**Attempt 1** (`bd179a0`..`4885326`, 6 commits): CI failed at the Lint step.
+`golangci-lint-action@v6` with `version: latest` installed **v1.64.8**
+(built with go1.24), which refuses to lint a module declaring `go 1.25.0`
+("the Go language version (go1.24) used to build golangci-lint is lower
+than the targeted Go version"). Not a `.golangci.yml` v1/v2 format problem
+as the earlier handoff speculated — a binary-version problem.
+
+**Attempt 2** (`a70dcb8`): Pinned `version: v2.13.1` (confirmed locally: built
+with go1.27, satisfies go1.25). Also fixed the 7 real lint findings that
+surfaced once the linter could actually run — downloaded the v2.13.1 binary
+locally and ran it before pushing again:
+- `internal/httpclient/client.go:172` — unchecked `resp.Body.Close()`
+  (errcheck) → wrapped in `defer func() { _ = resp.Body.Close() }()`.
+- 6× `revive` unused-parameter warnings across
+  `internal/httpclient/client_test.go`, `internal/providers/duckduckgo/duckduckgo_test.go`,
+  and `orchestration_test.go` — unused `httptest.HandlerFunc` params (`w`
+  or `r`) renamed to `_`.
+
+CI still failed: `golangci-lint-action@v6` **hard-rejects golangci-lint v2
+entirely** ("golangci-lint v2 is not supported by golangci-lint-action v6,
+you must update to golangci-lint-action v7").
+
+**Attempt 3** (`cbf31d6`): Bumped the action to `@v9` (current major, not
+just the minimum `@v7`). **This one passed.**
+
+**Attempt 4** (`5383e1f`, cosmetic): the passing run still carried a
+Node.js 20 deprecation annotation from `actions/checkout@v4` and
+`actions/setup-go@v5`. Bumped both to their current majors (`@v7` each).
+Passed clean, no annotations.
+
+Also used this leg to re-confirm, with fresh captures, that **Google and
+Yandex are still blocked from this sandbox** — same outcome as the
+2026-07-29 design-phase finding, now re-verified same-day as DuckDuckGo's
+success:
+- Google (`https://www.google.com/search?q=facebook`): 200 OK but body is
+  the `/httpservice/retry/enablejs` JS-required redirect page — confirmed
+  byte-identical in shape to the existing `testdata/google/blocked.html`
+  fixture (different nonce/session id only). `httpclient.Detect` correctly
+  classifies it as `ErrChallenge`.
+- Yandex (`https://yandex.com/search/?text=facebook`): 200 status but
+  `FinalURL` redirected to `/showcaptcha` with `X-Yandex-Captcha: captcha`
+  header present — `httpclient.Detect` correctly classifies as
+  `ErrChallenge`.
+
+Both capture attempts used a throwaway `.capture/main.go` (same pattern as
+leg 2's DuckDuckGo capture): written, run, deleted, never committed. Did
+not save these as new fixtures since they're materially identical to what
+`testdata/google/blocked.html` already covers — no new regression coverage
+to gain from a second nonce of the same JS-challenge page.
+
+User chose (via AskUserQuestion) to keep Phase 2/3 blocked rather than
+pursue a residential capture or switch to unrelated work this session —
+confirmed by the "push it" answer that followed.
+
+**Commit status:** `5383e1f` on `main`, **pushed to origin** — this is the
+first push of the session; all four prior handoff legs' work is now live.
+
+**Verification (local, before each push):**
+```bash
+$ go build ./... && go vet ./... && gofmt -l . && go test -race ./...
+ok  	github.com/BugraAkdemir/gosearch	1.015s
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.379s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.024s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	(cached)
+```
+**Verification (CI, actual GitHub Actions runs, not assumed):**
+- `32636532133` (attempt 1): ❌ failure — Lint step, golangci-lint binary/Go-version mismatch
+- `32636739726` (attempt 2): ❌ failure — Lint step, action v6 rejects golangci-lint v2 outright
+- `32636797726` (attempt 3): ✅ success — 48s, 1 Node.js-20-deprecation annotation (non-fatal)
+- `32636878289` (attempt 4): ✅ success — 59s, zero annotations
+
+Updated `AGENTS.md`'s CI section with a note that `golangci-lint-action`
+major version and `.golangci.yml`'s v1/v2 format must move together (v6
+cannot run a v2 config's binary at all, regardless of format correctness).
+
+## Next Session
+
+1. Phase 2/3 (Google/Yandex providers) remain correctly blocked — need a
+   real, non-JS-challenge capture from a residential IP for each. Nothing
+   in this sandbox can produce that; needs the user's own network.
+2. No other open items from this session. The golangci-lint config format
+   question flagged as "untested" in leg 1's handoff is now resolved: the
+   v2 format itself was never the problem, only the action major version.
+
+---
+
 ## Session 2, leg 3 (same day) — docs/ (API reference + architecture)
 
 User asked for `docs/` + confirmed CI was already in place. Added:
