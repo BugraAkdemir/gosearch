@@ -71,11 +71,14 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 
 // allocatorFlags keeps per-instance consumption low and behavior stable:
 // no GPU process, no images (search pages are text), a small window, and a
-// private profile directory. The browser itself is NEVER patched or disguised
-// — see the package comment for the project line on anti-bot behavior.
-func allocatorFlags(profileDir string) []chromedp.ExecAllocatorOption {
+// private profile directory. The resolved executable is pinned explicitly so
+// chromedp launches OUR binary instead of probing PATH itself. The browser
+// itself is NEVER patched or disguised — see the package comment for the
+// project line on anti-bot behavior.
+func allocatorFlags(profileDir, executable string) []chromedp.ExecAllocatorOption {
 	base := chromedp.DefaultExecAllocatorOptions[:]
 	extra := []chromedp.ExecAllocatorOption{
+		chromedp.ExecPath(executable),
 		chromedp.Flag("headless", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("disable-dev-shm-usage", true),

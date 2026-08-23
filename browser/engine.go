@@ -76,7 +76,7 @@ func (e *Engine) start(parent context.Context) error {
 		lifetime, stopLifetime := context.WithCancel(context.WithoutCancel(parent))
 		e.stop = stopLifetime
 
-		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime, allocatorFlags(e.profileDir)...)
+		allocCtx, stopAllocator := chromedp.NewExecAllocator(lifetime, allocatorFlags(e.profileDir, e.executable)...)
 		e.stopAllocator = stopAllocator
 		tabCtx, _ := chromedp.NewContext(allocCtx)
 		if err := chromedp.Run(tabCtx); err != nil {
