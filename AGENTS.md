@@ -51,6 +51,7 @@ reimplemented per provider. `Fetch()` is engine-independent and uses
 | `examples/basic/` | Runnable usage example | `main.go` |
 | `testdata/` | Captured real block/success pages + synthetic fixtures per provider | `*/blocked.html`, `*/success.html`, `*/real_success.html` |
 | `docs/` | Human-readable API reference + architecture doc (companions to `go doc`, not a replacement) | `API.md`, `ARCHITECTURE.md` |
+| `browser/` | SEPARATE Go module: optional real-browser engine (chromedp/CDP) for JS-gated pages; system discovery, opt-in download, `-tags gosearch_embed_engine` embedding. See its README + the Phase 5 dependency decision above | `engine.go`, `search.go`, `fetch.go`, `cfd.go`, `discover.go` |
 
 ### Entry Points
 
@@ -156,6 +157,7 @@ effectively permanent on the Go module proxy once fetched.
 6. **Commit automatically, without asking, once a fix/feature is verified green.** Use **Conventional Commits** (`feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `test(scope): ...`, `ci: ...`, `refactor(scope): ...`), with a body explaining the *why*. **Never include an AI-attribution / `Co-Authored-By` line, under any circumstance.** Commit frequently at natural checkpoints (not every file save, not only once per whole task) — especially right before a risky step, so history can be bisected/reverted cleanly.
 7. **Code exploration:** the codebase-memory MCP tools (`search_graph`, `trace_path`, `get_code_snippet`) are available and preferred over blind grepping for "who calls X / what does X call" questions once the project has enough code to index. For a package this small, plain Read/Grep is fine too — use judgment.
 8. **Zero-dependency discipline is a hard rule:** do not add any third-party dependency beyond `golang.org/x/net/html` without recording an explicit decision in this file first. The entire value proposition is being lightweight enough to drop into a local-first project — a stray dependency silently breaks that promise for every downstream user.
+   **Decision 2026-08-23 (Phase 5):** the `browser/` subdirectory is a SEPARATE Go module (own `go.mod`, `replace` to the parent) precisely so it may carry third-party deps — `github.com/chromedp/chromedp` for CDP driving — without touching the core module's promise. `go get github.com/BugraAkdemir/gosearch` still resolves to the core only; the browser engine is opt-in via `go get github.com/BugraAkdemir/gosearch/browser`. Core rule unchanged: nothing beyond x/net enters the root module.
 9. **Documentation is not optional.** Every exported type, function, and package gets a real Go doc comment (behavior, not a name restatement). When a change adds or changes public API, exported errors, or provider/fallback behavior, update `README.md`'s examples in the **same commit**. Package-level docs must state real limitations (per-provider anti-bot fragility), not just the happy path.
 
 ### Verification Commands (mandatory before any "done" claim)

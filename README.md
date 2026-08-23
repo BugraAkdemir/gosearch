@@ -153,21 +153,31 @@ This library will **never** solve CAPTCHAs, execute JS challenges, mask
 a security control. It behaves like an ordinary visitor and reports honestly
 when an engine blocks it — anything beyond that is out of scope by design.
 
+## Optional: real-browser rendering (`gosearch/browser`)
+
+For pages that require JS to render at all (which defeats the plain-HTTP
+`Fetch()`), an opt-in **separate module** drives a real, unmodified headless
+Chromium-family browser — never a dependency of the core, so `go get
+github.com/BugraAkdemir/gosearch` stays exactly as light as described above.
+
+```bash
+go get github.com/BugraAkdemir/gosearch/browser
+```
+
+- Discovers Chrome/Edge/Chromium on the system; can optionally download
+  Google's official `chrome-headless-shell` with explicit permission, or be
+  compiled with the engine embedded via `-tags gosearch_embed_engine`.
+- One long-lived instance + one reused tab: steady-state cost ≈ one page's
+  RAM, not a browser per request.
+- Same honest line as the rest of the project: it executes JavaScript but
+  never solves CAPTCHAs or masks automation. See
+  [`browser/README.md`](./browser/README.md) for trade-offs and limits.
+
 This isn't sold as "always works" — see [`plan.md`](./plan.md) for exactly
 how each provider's block-detection and fallback behavior is meant to work,
 and `AGENTS.md`'s Known Pitfalls log for what's actually been verified
 against a live engine response versus what's still best-effort.
 
-## Optional: real-browser rendering (`gosearch/browser`)
-
-For pages that require JS to render at all (which defeats the plain-HTTP
-`Fetch()`), a separate, opt-in subpackage will drive a real, unmodified
-headless browser — never a dependency of the core module, so `go get
-github.com/BugraAkdemir/gosearch` stays exactly as light as described above.
-See Phase 5 in [`plan.md`](./plan.md) for the full design, including the
-runtime-download-with-persistent-cache model and the opt-in
-`embedbrowser` build tag for developers who'd rather trade binary size for
-zero runtime network dependency.
 
 ## Roadmap
 

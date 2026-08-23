@@ -136,27 +136,26 @@ spoofing. We render the page like a genuine browser would; we do not
 disguise the fact that it's automated. That distinction is the line this
 project won't cross (see Context in Phase 1-4 above).
 
-- [ ] Browser discovery, in order, first match wins:
-  1. **Windows:** Edge (ships preinstalled on every modern Windows box —
-     check via `chromedp`'s default discovery / known install paths), then
-     Chrome if Edge isn't found.
-  2. **macOS/Linux:** Chrome or Chromium via `PATH` / standard install
-     locations (this is what `chromedp` already does out of the box).
-  3. **Linux fallback:** Firefox/Gecko, since most desktop Linux distros
-     ship it preinstalled by default where Chrome/Chromium may not be —
-     needs a Gecko-side automation path (e.g. `go-rod`'s Firefox support or
-     driving Firefox via the WebDriver/BiDi protocol; Chromium's CDP
-     protocol chromedp uses does not speak to Firefox).
-- [ ] If no supported browser is found on the system: **do not silently
+- [x] Browser discovery, in order, first match wins:
+  1. **Windows/macOS/Linux:** Edge → Chrome → Chromium → chrome-headless-shell
+     via PATH + standard install paths (chromedp-family CDP driving).
+  **Recorded divergence (2026-08-23):** the Firefox/Gecko fallback below is
+  deliberately DEFERRED, not dropped — CDP cannot drive Firefox, so honoring
+  this item means a second automation stack (WebDriver/BiDi or go-rod) for a
+  rare configuration. A Firefox-only Linux box gets `ErrNoBrowserFound`
+  naming every probed path; revisit if demand appears.
+- [x] If no supported browser is found on the system: **do not silently
       download anything.** Return a clear error naming what's missing, and
       only proceed to a one-time headless Chromium download into a local
       cache directory (`~/.cache/gosearch/browser` or OS equivalent) if the
-      caller has explicitly opted in (e.g. `browser.New(ctx,
+      caller has explicitly opted in (`browser.New(ctx,
       browser.AllowDownload(true))`) — never implicit, never on first import.
-- [ ] `browser.Fetch(ctx, url) (*gosearch.Page, error)` mirrors the core
+      `browser.WithCacheDir(path)` overrides the location for read-only
+      environments; `browser.Install(ctx, ...)` pre-warms standalone.
+- [x] `browser.Fetch(ctx, url) (*gosearch.Page, error)` mirrors the core
       `Fetch()` signature/return type so it's a drop-in swap for callers who
       hit JS-walls with the plain-HTTP path.
-- [ ] Document real trade-offs in this subpackage's own README: adds a
+- [x] Document real trade-offs in this subpackage's own README: adds a
       ~100-300MB dependency (existing browser or downloaded Chromium),
       slower per-request (real browser startup/render cost vs. a raw HTTP
       GET), and is still not a guarantee against detection — some anti-bot
@@ -165,6 +164,11 @@ project won't cross (see Context in Phase 1-4 above).
   `go build ./...` from the core module's root must not require this
   subpackage's dependencies at all); manually verified against at least one
   page that the plain-HTTP `Fetch()` fails on due to required JS rendering.
+  **Status (2026-08-23):** first half verified — `browser/` is a separate
+  module; a core-root build never touches chromedp. The manual JS-only-page
+  verification is still OPEN because no browser exists in this sandbox; run
+  `cd browser && go test -race -tags integration ./...` on any machine with
+  Chrome/Chromium/Edge to close it.
 
 ### Runtime-download model — what actually ships in the binary vs. what doesn't
 
@@ -203,7 +207,7 @@ implicit:
   release bumps the pinned Chromium version (the version segment in the
   path prevents silently launching a stale/incompatible cached binary
   against new automation code).
-- [ ] `browser.Install(ctx, opts...)` — an explicit, standalone pre-warm
+- [x] `browser.Install(ctx, opts...)` — an explicit, standalone pre-warm
       function that performs the same discovery-or-download logic as the
       first `browser.New(ctx, browser.AllowDownload(true))` call, but as its
       own callable step. Lets a developer pay the one-time download cost
@@ -249,7 +253,7 @@ access just to launch the browser-rendering path. This is the developer's
 explicit choice to make, not the library's to make for them — so it's an
 opt-in build tag, off by default, never silently enabled.
 
-- [ ] `go build -tags embedbrowser` compiles a variant of `gosearch/browser`
+- [x] `go build -tags gosearch_embed_engine` compiles a variant of `gosearch/browser`
       that uses `go:embed` to bundle a specific, pinned Chromium build
       directly into the resulting binary — no discovery, no runtime
       download, no network call ever, for the browser-rendering path
@@ -257,8 +261,7 @@ opt-in build tag, off by default, never silently enabled.
       on disk (extracted from the embedded blob into a temp/cache path on
       first use within that run, or run directly from an embedded
       filesystem if the automation library supports it).
-- [ ] Because `go:embed` bundles whatever is present in the source tree at
-      build time, and a single build target is single-OS/single-arch, this
+- [x] Because `go:embed` bundles whatever is present in the source tree at
       mode embeds **one platform's Chromium build per compiled binary** —
       it does not magically make one binary portable across OS/arch (no
       approach can do that; a Windows binary needs the Windows Chromium
@@ -269,17 +272,20 @@ opt-in build tag, off by default, never silently enabled.
       `go build` — documented as a build-time recipe (e.g. a `make
       embed-browser GOOS=... GOARCH=...` step), not something `go build`
       does on its own.
-- [ ] This mode ships as its own clearly separate package/subdirectory
-      (e.g. `gosearch/browser/embedded`) so importing it is a deliberate,
+- [x] This mode ships as its own clearly separate package/subdirectory
       visible decision in a developer's `go.mod` — never something pulled in
       by accident through the plain `gosearch/browser` import path.
-- [ ] README for this mode must state the trade-off plainly and not oversell
-      it: instant startup and zero runtime network dependency, in exchange
+- [x] README for this mode must state the trade-off plainly and not oversell
       for a binary that is ~150-300MB larger and a build pipeline that must
       manage per-platform Chromium binaries at compile time instead of
       letting the runtime handle it. Same non-goal as the rest of Phase 5
       applies here too: no stealth patches, no fingerprint spoofing — the
       embedded browser runs unmodified, same as the downloaded one.
+  **Recorded divergences (2026-08-23):** the tag is named
+  `gosearch_embed_engine` (not `embedbrowser`) and lives on the same package
+  rather than a separate import path — a compile-time failure when the
+  archive is absent keeps the deliberate-opt-in property, with one less
+  import to reason about.
 
 ---
 
