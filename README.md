@@ -4,6 +4,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/BugraAkdemir/gosearch.svg)](https://pkg.go.dev/github.com/BugraAkdemir/gosearch)
 ![Go](https://img.shields.io/badge/go-1.25%2B-00ADD8?logo=go&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Website](https://img.shields.io/badge/site-gosearch.bugradev.com-F2A93B?logo=vercel&logoColor=white)](https://gosearch.bugradev.com)
 
 **Web search and page-content extraction for Go — no API key, no SDK, no
 account.**
@@ -262,12 +263,13 @@ Releases follow [semantic versioning](https://semver.org/) as annotated
 `vX.Y.Z` tags; the module proxy distributes them automatically. During
 `v0.x`, the public API may still evolve between minor versions — pin an exact
 version if that matters to you. The `browser/` directory is a separate Go
-module and will carry its own `browser/vX.Y.Z` tags when published.
+module with its own prefixed tags (`browser/vX.Y.Z`).
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
+| [**gosearch.bugradev.com**](https://gosearch.bugradev.com) | Project website — docs, release notes, and engine status, synced live from this repository |
 | [`docs/GETTING_STARTED.md`](./docs/GETTING_STARTED.md) | From zero to first search and first extraction |
 | [`docs/RECIPES.md`](./docs/RECIPES.md) | Copy-paste solutions: fallback chains, error handling, LLM pipelines, batch searching, the browser engine, troubleshooting |
 | [`docs/API.md`](./docs/API.md) | Human-readable reference for every function, type, option, and error (`go doc -all .` remains the source of truth) |
