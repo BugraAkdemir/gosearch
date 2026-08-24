@@ -86,11 +86,18 @@ func extractTitle(doc *html.Node) string {
 }
 
 // removeNoise detaches noise elements from the tree in place so they do not
-// contribute to scoring or content extraction.
+// contribute to scoring or content extraction. The document root (<html>) and
+// <body> are exempt: modern pages hang feature-flag classes on them
+// ("vector-feature-language-in-header-enabled", "sticky-header-enabled") whose
+// substrings match noise markers, and removing either element would erase the
+// whole page — a real failure observed against en.wikipedia.org.
 func removeNoise(doc *html.Node) {
 	var toRemove []*html.Node
 	htmlx.Walk(doc, func(n *html.Node) {
 		if n.Type != html.ElementNode {
+			return
+		}
+		if n.DataAtom == atom.Html || n.DataAtom == atom.Body {
 			return
 		}
 		if noiseTags[n.DataAtom] || hasNoiseIDClass(n) {

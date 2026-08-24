@@ -77,3 +77,30 @@ func TestExtractMalformedHTMLStillParses(t *testing.T) {
 		t.Errorf("Extract on malformed HTML errored: %v", err)
 	}
 }
+
+// TestExtractSurvivesNoiseMarkerClassesOnRoot pins a live-found bug
+// (en.wikipedia.org, 2026-08-24): modern pages put substrings like "header",
+// "menu", or "nav" on the <html>/<body> elements themselves via feature-flag
+// classes ("vector-feature-language-in-header-enabled"). Substring-matching
+// those markers against the ROOT elements removed the entire tree and made
+// every page yield empty content. The root must be untouchable.
+func TestExtractSurvivesNoiseMarkerClassesOnRoot(t *testing.T) {
+	page := []byte(`<html class="client-nojs vector-feature-language-in-header-enabled vector-feature-page-tools-pinned-disabled vector-feature-navigation-update-disabled">
+<body class="skin-vector sticky-header-enabled menu-visible">
+<nav class="sidebar"><a href="/">Home</a></nav>
+<article>
+<h2>Real content</h2>
+<p>This paragraph is the genuine article body, long enough with commas to score as the main content of the page.</p>
+</article>
+</body></html>`)
+	art, err := Extract(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(art.Content, "genuine article body") {
+		t.Errorf("Content = %q, want the article prose (root classes must not nuke the tree)", art.Content)
+	}
+	if strings.Contains(art.Content, "Home") {
+		t.Errorf("nav noise survived: %q", art.Content)
+	}
+}
