@@ -30,6 +30,34 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 4, leg 4 (same day) — v0.2.0 + browser/v0.1.0 released
+
+User pushed all pending work themselves, then explicitly asked for the new
+release (hard rule satisfied). Both modules cut in one pass:
+
+- **v0.2.0** (core): annotated tag on `43ceeec`, pushed `--follow-tags`.
+  Proxy verified via escaped path → Hash 43ceeec, exact tagged commit.
+  GitHub release published with full notes
+  (https://github.com/BugraAkdemir/gosearch/releases/tag/v0.2.0). CI green
+  on the tagged commit (run #32774512288).
+  Contents: Bing engine, canonical dedup, WithMarkdown/WithDates/domain
+  policy, readability root-class fix, professional docs overhaul.
+  Semver: additive only → minor bump v0.1.0→v0.2.0.
+- **browser/v0.1.0**: prefixed tag (multi-module requirement) on the same
+  commit, pushed separately. Proxy verified with version string `v0.1.0`
+  under subdir module path — NOTE: proxy URL takes the MODULE version
+  (`v0.1.0`), not the raw tag name (`browser/v0.1.0`); passing the raw tag
+  name returns "invalid escaped version". Both README install paths are now
+  real. User approved via question tool.
+
+Pre-release verification pasted into session: root build/vet/gofmt-clean,
+9/9 test packages -race, golangci-lint 0 issues; browser build/vet/gofmt,
+tests ok. BUG_REPORT.md status refreshed pre-tag (`43ceeec` carries it).
+
+**Next Session:** nothing pending from this release. Remaining open threads
+are user-side one-timers: Google/Yandex real captures (trusted network),
+Bing capture (any network), browser integration test on a Chrome machine.
+
 ## Session 4, leg 3 (same day) — live verification of the quality package; real Wikipedia bug found & fixed
 
 User demanded comprehensive REAL testing: every new feature, options ON and
