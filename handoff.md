@@ -30,6 +30,62 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 4, leg 2 (same day) — quality package: dedup + WithMarkdown + WithDates + domain policy
+
+User brainstormed quality improvements with an LLM-agent consumer in mind and
+approved a three-part package with two amendments: markdown is OPT-IN, dates
+are OPT-IN/closable (historical queries must stay timeless). The working
+checklist lives in **gitignored `yapacak.md`** (user-requested artifact — do
+NOT commit it; .gitignore covers it).
+
+Shipped, each TDD'd red→green and committed separately:
+
+- `71f1abc feat(search): canonical URL dedup across providers` —
+  `provider.NormalizeURL` builds a comparison key folding host case, default
+  ports, fragments, percent-encoding, parameter order, and Unicode simple
+  case; fixes the live-observed Bing duplicate (`?il=Istanbul` vs
+  `?il=%C4%B0stanbul`). Key discovery via test-first: percent-decoding ALONE
+  does not merge that pair (Istanbul ≠ İstanbul as strings) — Go's simple
+  `unicode.ToLower('İ')='i'` fold does. DuckDuckGo gains its first-ever
+  dedup; `Result.URL` keeps the first-seen original spelling.
+- `cd95fa2 feat(fetch): opt-in Markdown output via WithMarkdown` —
+  `readability.ExtractMarkdown` renders the winning container as GFM
+  (# headings, bullets, fenced code, [text](href), emphasis, pipe tables)
+  with documented simplifications; default `Extract` output pinned unchanged
+  by a leak-marker test.
+- `8d745af feat(search): opt-in result dates via WithDates` —
+  `provider.ExtractDate` (<time datetime> first, then Bing's news_dt span,
+  container-scoped); providers always extract, the root strips unless opted
+  in — visibility is a caller decision, not a parser's. Empty Date is normal.
+- `4c928fe feat(search): caller-side domain policy` — `WithBlockedDomains`/
+  `WithAllowedDomains`, host-or-subdomain match (spam.example.net kills
+  www.spam.example.net, spares notspam.example.net), deny before allow,
+  applied post-success only; empty filtered set is a valid answer and never
+  triggers fallback.
+- `883c318 chore`: ignore yapacak.md/.probe. NOTE: user pushed through
+  883c318 themselves between turns — only the domain-policy commit (and this
+  docs commit) are local at wrap-up.
+
+Docs same-commit per rule 9 (README what-it-does bullets/options;
+docs/API.md Search notes, Result.Date row, options rows). AGENTS.md intro +
+Known Open Work refreshed for Bing.
+
+**Verification (pasted):**
+
+```
+$ go build ./... && go vet ./... && gofmt -l . ; go test -race -count=1 ./...
+ok  root, e2e, httpclient, provider, providers/{bing,duckduckgo,google,yandex}, readability  (~1.0s each)
+(gofmt printed nothing)
+$ golangci-lint run   # fixed gocritic unlambda + staticcheck QF1001 found en route
+0 issues.
+browser module: go build + go test ok
+```
+
+**Next Session:** open threads unchanged: (a) real captures Google/Yandex
+(trusted network) + Bing (any network), (b) browser integration test on a
+user machine, (c) browser module publish decision (`browser/vX.Y.Z`),
+(d) push `4c928fe` when user approves.
+
 ## Session 4 (2026-08-24) — Bing provider built; stale handoff + broken tree repaired
 
 handoff.md had NO record of it, but the working tree held unfinished,

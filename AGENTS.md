@@ -1,7 +1,7 @@
 # AGENTS.md — gosearch
 
 `gosearch` is a zero-API-key Go library that does web search (Google, Yandex,
-DuckDuckGo) by fetching and parsing each engine's public HTML result page
+DuckDuckGo, Bing) by fetching and parsing each engine's public HTML result page
 directly, plus a `Fetch()` that extracts the readable content of any URL. It
 exists for local-first / zero-dependency Go programs (e.g. an LLM agent's
 web-search tool) that can't or won't depend on a hosted search API. Core
@@ -222,11 +222,13 @@ must be addressed before claiming done.
 ## Known Open Work
 
 Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't
-duplicate that list here. As of 2026-08-23: 0 open items; Phases 1–3 are
-shipped (all three engines implemented and wired), Phase 4 hardening is the
-active phase. Still open from the Phase 2/3 exit criteria: real success-page
+duplicate that list here. As of 2026-08-24: 0 open items; Phases 1–4 are
+shipped, Phase 5 browser module built, plus a post-v0.1 quality package
+(canonical URL dedup, opt-in `WithMarkdown`/`WithDates`, domain policy).
+Still open from the exit criteria: real success-page
 captures from a trusted network for Google (`testdata/google/
-real_success.html`) and Yandex (`testdata/yandex/real_success.html`) — the
+real_success.html`) and Yandex (`testdata/yandex/real_success.html`) — and
+from ANY network for Bing (`testdata/bing/real_success.html`) — the
 pre-wired regression tests activate on their own once the files land.
 
 ---
