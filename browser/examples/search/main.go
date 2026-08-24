@@ -30,9 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer e.Close()
 
 	results, err := e.Search(ctx, query)
+	// Close explicitly on every path: a deferred Close would be skipped by
+	// log.Fatalf's os.Exit below.
+	_ = e.Close()
 	if err != nil {
 		log.Fatalf("search: %v", err)
 	}
