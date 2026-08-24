@@ -132,6 +132,8 @@ variadic args, applied in the order given.
 | `WithRetries(n int)` | Both | Transient failures (transport errors, HTTP 408/5xx) are retried with exponential backoff. Default `2`; `0`/negative disables. Blocks/challenges (`ErrBlocked`/`ErrChallenge`) are never retried — use `WithFallback` for those. |
 | `WithMarkdown()` | Fetch only | Renders `Page.Content` as GitHub-flavored Markdown (headings, lists, fenced code, links, emphasis) instead of plain text. Ideal when feeding page content to an LLM. Default off — output is unchanged without it. Ignored by `Search`. |
 | `WithDates()` | Search only | Fills `Result.Date` from each engine's freshness metadata (best-effort, often absent). Does not change the query or results — only surfaces metadata already on the page. Default off. Ignored by `Fetch`. |
+| `WithBlockedDomains(domains ...string)` | Search only | Drops results whose host is the domain or a subdomain of one (`spam.example.net` kills `www.spam.example.net`, spares `notspam.example.net`). Applied after a successful search; filtering everything away is a valid empty answer and does **not** trigger fallback. |
+| `WithAllowedDomains(domains ...string)` | Search only | Inverse: keeps only hosts matching the list (host-or-subdomain); everything else, including unparseable-host results, drops. Deny is applied before allow when both are set. |
 
 ## Errors
 

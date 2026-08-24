@@ -48,6 +48,11 @@ type config struct {
 	// dates lets Search copy each provider result's best-effort freshness
 	// stamp into Result.Date when true. Off by default.
 	dates bool
+
+	// allowedDomains/blockedDomains implement the caller's post-search domain
+	// policy; both empty means no filtering.
+	allowedDomains []string
+	blockedDomains []string
 }
 
 // defaultConfig returns the baseline configuration used before any Option is
@@ -143,6 +148,24 @@ func WithMarkdown() Option {
 // option is Search-only and is ignored by Fetch.
 func WithDates() Option {
 	return func(c *config) { c.dates = true }
+}
+
+// WithBlockedDomains drops Search results whose host is one of the given
+// domains or a subdomain of one ("spam.example.net" also kills
+// "www.spam.example.net" but not "notspam.example.net"). This is the
+// caller's SEO-spam / quality policy — the library itself makes no judgments
+// about which sites deserve to exist. Combined with WithAllowedDomains, deny
+// is applied first. Search-only; ignored by Fetch.
+func WithBlockedDomains(domains ...string) Option {
+	return func(c *config) { c.blockedDomains = append(c.blockedDomains, domains...) }
+}
+
+// WithAllowedDomains keeps only Search results whose host matches one of the
+// given domains or a subdomain of one; everything else is dropped. Results
+// whose URL carries no parsable host cannot be proven allowed and drop too.
+// An empty list means no allowlisting. Search-only; ignored by Fetch.
+func WithAllowedDomains(domains ...string) Option {
+	return func(c *config) { c.allowedDomains = append(c.allowedDomains, domains...) }
 }
 
 // WithFallback sets the ordered list of engines to try if the primary engine

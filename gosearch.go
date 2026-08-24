@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 
 	"github.com/BugraAkdemir/gosearch/internal/httpclient"
 	"github.com/BugraAkdemir/gosearch/internal/provider"
@@ -51,7 +53,7 @@ func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([
 	for _, e := range engines {
 		results, err := dispatch(ctx, e, client, query, cfg.maxResults)
 		if err == nil {
-			return toResults(results, cfg.dates), nil
+			return applyDomainPolicy(toResults(results, cfg.dates), cfg), nil
 		}
 		errs = append(errs, err)
 		// Only a block/challenge is worth trying the next engine for.
@@ -62,6 +64,67 @@ func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([
 		return nil, err
 	}
 	return nil, errors.Join(errs...)
+}
+
+// applyDomainPolicy enforces the caller's WithBlockedDomains/WithAllowedDomains
+// rules: deny first (host or subdomain match drops a result), then the
+// allowlist (only host-or-subdomain matches survive; results without a
+// parsable host cannot be proven allowed and drop). Filtering everything away
+// is a valid empty answer, not an error — it must not trigger fallback, which
+// is reserved for blocks/challenges. With neither list set this is identity.
+func applyDomainPolicy(rs []Result, cfg *config) []Result {
+	if len(cfg.allowedDomains) == 0 && len(cfg.blockedDomains) == 0 {
+		return rs
+	}
+	lower := func(ds []string) []string {
+		out := make([]string, len(ds))
+		for i, d := range ds {
+			out[i] = strings.ToLower(strings.Trim(d, "."))
+		}
+		return out
+	}
+	denied := lower(cfg.blockedDomains)
+	allowed := lower(cfg.allowedDomains)
+
+	matches := func(host, domain string) bool {
+		return host == domain || strings.HasSuffix(host, "."+domain)
+	}
+	hostOf := func(rawURL string) string {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			return ""
+		}
+		return strings.ToLower(u.Hostname())
+	}
+
+	out := make([]Result, 0, len(rs))
+	for _, r := range rs {
+		host := hostOf(r.URL)
+		blocked := false
+		for _, d := range denied {
+			if host != "" && matches(host, d) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		if len(allowed) > 0 {
+			ok := false
+			for _, d := range allowed {
+				if host != "" && matches(host, d) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // dispatch routes a search to the provider package for e. It is a package var

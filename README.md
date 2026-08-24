@@ -56,6 +56,10 @@ a web browser would.
 - **Opt-in freshness dates** — `WithDates()` fills `Result.Date` with each
   engine's own stamp when it provides one; off by default, so callers who
   need timeless results never see date metadata by accident.
+- **Domain policy** — `WithBlockedDomains(...)` / `WithAllowedDomains(...)`
+  enforce your own spam and quality rules on the result list (host-or-
+  subdomain matching, deny before allow). The library judges no site on its
+  own; policy is yours.
 
 ## What it deliberately does not do
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -112,6 +114,77 @@ func TestSearchDatesOptIn(t *testing.T) {
 	}
 	if dated[0].Date != "2026-08-20" {
 		t.Errorf("WithDates() Date = %q, want %q", dated[0].Date, "2026-08-20")
+	}
+}
+
+// stubResults dispatches a fixed result set for filter testing.
+func stubResults(t *testing.T, rs []provider.Result) {
+	t.Helper()
+	withDispatch(t, func(_ context.Context, _ Engine, _ *httpclient.Client, _ string, _ int) ([]provider.Result, error) {
+		return rs, nil
+	})
+}
+
+func sampleResults() []provider.Result {
+	return []provider.Result{
+		{Title: "t1", URL: "https://good.example.com/a"},
+		{Title: "t2", URL: "https://spam.example.net/b"},
+		{Title: "t3", URL: "https://www.spam.example.net/"},
+		{Title: "t4", URL: "https://notspam.example.net/c"},
+		{Title: "t5", URL: "https://other.org/d"},
+	}
+}
+
+func hostsOf(rs []Result) []string {
+	out := make([]string, 0, len(rs))
+	for _, r := range rs {
+		u, _ := url.Parse(r.URL)
+		out = append(out, u.Hostname())
+	}
+	return out
+}
+
+// TestSearchDomainFilters pins the allow/block policy: blocked domains match
+// their subdomains but not longer host names that merely end with the same
+// text; an allowlist keeps only suffix matches; deny is applied before allow;
+// and without either list nothing is filtered.
+func TestSearchDomainFilters(t *testing.T) {
+	stubResults(t, sampleResults())
+
+	unfiltered, err := Search(context.Background(), "q", DuckDuckGo)
+	if err != nil || len(unfiltered) != 5 {
+		t.Fatalf("unfiltered = %d results (err %v), want 5", len(unfiltered), err)
+	}
+
+	denied, err := Search(context.Background(), "q", DuckDuckGo,
+		WithBlockedDomains("spam.example.net"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"good.example.com", "notspam.example.net", "other.org"}
+	if got := hostsOf(denied); !reflect.DeepEqual(got, want) {
+		t.Errorf("deny kept %v, want %v (subdomains die, lookalike 'notspam' survives)", got, want)
+	}
+
+	allowed, err := Search(context.Background(), "q", DuckDuckGo,
+		WithAllowedDomains("example.net"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []string{"spam.example.net", "www.spam.example.net", "notspam.example.net"}
+	if got := hostsOf(allowed); !reflect.DeepEqual(got, want) {
+		t.Errorf("allow kept %v, want %v", got, want)
+	}
+
+	both, err := Search(context.Background(), "q", DuckDuckGo,
+		WithAllowedDomains("example.net"),
+		WithBlockedDomains("notspam.example.net"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = []string{"spam.example.net", "www.spam.example.net"}
+	if got := hostsOf(both); !reflect.DeepEqual(got, want) {
+		t.Errorf("deny+allow kept %v, want %v (deny wins over allow)", got, want)
 	}
 }
 
