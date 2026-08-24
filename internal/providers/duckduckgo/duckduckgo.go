@@ -72,12 +72,15 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 	})
 
 	var out []provider.Result
+	seen := map[string]bool{}
 	for _, a := range titleLinks {
 		title := htmlx.Text(a)
 		href := cleanURL(htmlx.Attr(a, "href"))
-		if title == "" || href == "" {
+		key := provider.NormalizeURL(href)
+		if title == "" || href == "" || seen[key] {
 			continue
 		}
+		seen[key] = true
 		res := provider.Result{Title: title, URL: href}
 		if container := enclosingResult(a); container != nil {
 			if snip := htmlx.FindFirst(container, func(n *html.Node) bool {

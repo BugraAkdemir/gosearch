@@ -100,6 +100,27 @@ func TestParseMaxResults(t *testing.T) {
 	}
 }
 
+// TestParseDedupsEncodingVariants pins canonical-URL dedup: one page listed
+// under different spellings of the same query value must yield one result,
+// keeping the first-seen original spelling in Result.URL.
+func TestParseDedupsEncodingVariants(t *testing.T) {
+	page := `<html><body>
+<div class="result"><h2 class="result__title"><a class="result__a" href="https://ex.com/p?il=%C4%B0stanbul">Bir</a></h2></div>
+<div class="result"><h2 class="result__title"><a class="result__a" href="https://ex.com/p?il=Istanbul">İki</a></h2></div>
+</body></html>`
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := parse(doc, 0)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1 (encoding variants are one page)", len(results))
+	}
+	if got, want := results[0].URL, "https://ex.com/p?il=%C4%B0stanbul"; got != want {
+		t.Errorf("kept URL = %q, want first-seen original %q", got, want)
+	}
+}
+
 func TestCleanURL(t *testing.T) {
 	cases := map[string]string{
 		"//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fx&rut=z": "https://example.com/x",

@@ -109,6 +109,27 @@ func TestParseDeduplicatesResults(t *testing.T) {
 	}
 }
 
+// TestParseDedupsEncodingVariants pins canonical-URL dedup: one page listed
+// under different spellings of the same query value must yield one result,
+// keeping the first-seen original spelling in Result.URL.
+func TestParseDedupsEncodingVariants(t *testing.T) {
+	page := `<html><body>
+	<div class="g"><a href="/url?q=https%3A%2F%2Fex.com%2Fp%3Fil%3D%C4%B0stanbul&amp;sa=U"><h3>Bir</h3></a></div>
+	<div class="g"><a href="/url?q=https%3A%2F%2Fex.com%2Fp%3Fil%3DIstanbul&amp;sa=U"><h3>İki</h3></a></div>
+	</body></html>`
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := parse(doc, 0)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1 (encoding variants are one page)", len(results))
+	}
+	if got, want := results[0].URL, "https://ex.com/p?il=İstanbul"; got != want {
+		t.Errorf("kept URL = %q, want first-seen original %q", got, want)
+	}
+}
+
 // TestParseRealSuccessFixture guards against silent parser breakage against
 // Google's actual markup. real_success.html must be a real response captured
 // from a network Google trusts (residential IP); this sandbox gets served a

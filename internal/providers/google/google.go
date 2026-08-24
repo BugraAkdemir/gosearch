@@ -89,10 +89,11 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 	for _, a := range anchors {
 		dest := cleanURL(htmlx.Attr(a, "href"))
 		title := resultTitle(a)
-		if title == "" || seen[dest] {
+		key := provider.NormalizeURL(dest)
+		if title == "" || seen[key] {
 			continue
 		}
-		seen[dest] = true
+		seen[key] = true
 
 		res := provider.Result{Title: title, URL: dest, Snippet: resultSnippet(a)}
 		out = append(out, res)

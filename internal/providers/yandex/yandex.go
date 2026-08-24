@@ -89,10 +89,11 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 		}
 		dest := cleanURL(htmlx.Attr(link, "href"))
 		title := resultTitle(link)
-		if dest == "" || title == "" || seen[dest] {
+		key := provider.NormalizeURL(dest)
+		if dest == "" || title == "" || seen[key] {
 			continue
 		}
-		seen[dest] = true
+		seen[key] = true
 
 		res := provider.Result{Title: title, URL: dest}
 		if sn := htmlx.FindFirst(item, func(n *html.Node) bool {

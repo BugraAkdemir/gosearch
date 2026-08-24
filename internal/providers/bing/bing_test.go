@@ -128,6 +128,34 @@ func TestParseMaxResults(t *testing.T) {
 	}
 }
 
+// TestParseDedupsEncodingVariants pins the canonical-URL dedup: engines list
+// one page under several spellings (percent-encoded vs literal non-ASCII,
+// dotted vs undotted capital I — observed live on Bing), and callers must see
+// one result. The first-seen original spelling is what surfaces in Result.URL.
+func TestParseDedupsEncodingVariants(t *testing.T) {
+	page := `<!doctype html><html><body><ol id="b_results">
+<li class="b_algo">
+  <h2><a href="https://www.bing.com/ck/a?!&&amp;&amp;p=tok1">Bir</a></h2>
+  <div class="b_attribution"><cite>https://ex.com/p?il=%C4%B0stanbul</cite></div>
+</li>
+<li class="b_algo">
+  <h2><a href="https://www.bing.com/ck/a?!&&amp;&amp;p=tok2">İki</a></h2>
+  <div class="b_attribution"><cite>https://ex.com/p?il=Istanbul</cite></div>
+</li>
+</ol></body></html>`
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := parse(doc, 0)
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1 (encoding variants are one page)", len(results))
+	}
+	if got, want := results[0].URL, "https://ex.com/p?il=%C4%B0stanbul"; got != want {
+		t.Errorf("kept URL = %q, want first-seen original %q", got, want)
+	}
+}
+
 func newTestClient(t *testing.T) *httpclient.Client {
 	t.Helper()
 	c, err := httpclient.New(httpclient.Config{})
