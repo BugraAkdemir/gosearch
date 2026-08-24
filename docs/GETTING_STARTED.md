@@ -65,6 +65,19 @@ fmt.Println(page.Content) // main text only — nav/ads/footer stripped
 JavaScript, so pages that render entirely client-side come back with an
 empty `Content` — when you hit that, see [the browser engine](./RECIPES.md#when-plain-http-is-not-enough-the-browser-engine).
 
+### Prefer Markdown? One option.
+
+```go
+page, err := gosearch.Fetch(ctx,
+	"https://en.wikipedia.org/wiki/Facebook",
+	gosearch.WithMarkdown(),
+)
+fmt.Println(page.Content) // "#"-headings, lists, [links](…), ```code``` preserved
+```
+
+This is the natural format for feeding page content to an LLM. The default
+stays plain text, so nothing changes unless you ask.
+
 ## Which engine should I use?
 
 | Engine | Status | Use it when |

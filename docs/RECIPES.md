@@ -8,6 +8,10 @@ semantics see [API.md](./API.md); for a from-zero walkthrough see
 - [Search with an automatic fallback chain](#search-with-an-automatic-fallback-chain)
 - [Handle every error class correctly](#handle-every-error-class-correctly)
 - [Read a page's actual content](#read-a-pages-actual-content)
+- [Get page content as Markdown](#get-page-content-as-markdown)
+- [Build an LLM retrieval pipeline](#build-an-llm-retrieval-pipeline)
+- [Work with result freshness dates](#work-with-result-freshness-dates)
+- [Enforce your own domain policy](#enforce-your-own-domain-policy)
 - [Tune retries for flaky networks](#tune-retries-for-flaky-networks)
 - [Route through your own proxy](#route-through-your-own-proxy)
 - [Reuse your browser's session (cookies)](#reuse-your-browsers-session-cookies)
@@ -116,6 +120,103 @@ Notes:
   → use the browser engine (last recipe).
 - Anti-bot responses surface as `ErrBlocked`/`ErrChallenge` here too, not as
   raw HTML in your `Page`.
+
+## Get page content as Markdown
+
+Plain text flattens structure; Markdown keeps it. For any consumer that
+understands formatting — above all LLMs — opt in:
+
+```go
+page, err := gosearch.Fetch(ctx, url, gosearch.WithMarkdown())
+if err != nil {
+	log.Fatal(err)
+}
+fmt.Println(page.Content)
+// # Heading
+// prose with an [inline link](https://…), **bold**, *italics*, `code`
+// - list item
+// ```
+// fenced code block
+// ```
+```
+
+Without `WithMarkdown()` the output stays byte-for-byte the historical plain
+text, so existing callers are unaffected. Deliberate simplifications:
+nested inline formatting flattens (a link inside bold renders its inner
+text), `<br>` becomes a space, blockquotes collapse to one line, and table
+cells carry inline text only.
+
+## Build an LLM retrieval pipeline
+
+The standard agent flow: search for candidates, read the top hits, hand the
+combined Markdown to the model.
+
+```go
+func retrieve(ctx context.Context, question string) (string, error) {
+	results, err := gosearch.Search(ctx, question, gosearch.DuckDuckGo,
+		gosearch.WithFallback(gosearch.Bing),
+		gosearch.WithMaxResults(5),
+		gosearch.WithDates(), // lets you prefer fresh sources
+		gosearch.WithBlockedDomains("pinterest.com"),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var sb strings.Builder
+	n := 3
+	if len(results) < n {
+		n = len(results)
+	}
+	for _, r := range results[:n] {
+		page, err := gosearch.Fetch(ctx, r.URL, gosearch.WithMarkdown())
+		if err != nil {
+			continue // one unreadable source must not sink the answer
+		}
+		fmt.Fprintf(&sb, "# %s\n(source: %s)\n\n%s\n\n", page.Title, r.URL, page.Content)
+	}
+	return sb.String(), nil // feed to your model as context
+}
+```
+
+Design notes: `WithDates()` is off by default so callers doing historical or
+snapshot work never see date metadata by accident; filtering everything away
+with domain policy yields an empty-but-valid result set, not an error.
+
+## Work with result freshness dates
+
+```go
+results, err := gosearch.Search(ctx, q, gosearch.Bing, gosearch.WithDates())
+for _, r := range results {
+	fmt.Printf("%s (%s)\n  %s\n", r.Title, r.Date, r.URL)
+}
+```
+
+- `Date` carries the engine's own stamp verbatim — `"2026-08-20"` on some
+  engines, human relative text like `"1 day ago"` on Bing. There is no
+  cross-engine normalization: the value is exactly what the page said.
+- Engines frequently omit dates on their no-JavaScript pages; empty `Date`
+  is normal even with `WithDates()`, not a failure.
+- Enabling it does not change what the engine is asked or returns — it only
+  surfaces metadata already present.
+
+## Enforce your own domain policy
+
+SEO-spam and AI-slop are ranking problems the library cannot judge — but you
+can filter by host after the fact:
+
+```go
+results, err := gosearch.Search(ctx, q, gosearch.DuckDuckGo,
+	gosearch.WithBlockedDomains("contentfarm.example"),   // deny first…
+	gosearch.WithAllowedDomains("wikipedia.org", "gov.tr"), // …then allowlist
+)
+```
+
+- Matching is host-or-subdomain: blocking `spam.example.net` also kills
+  `www.spam.example.net` but spares `notspam.example.net`.
+- Deny is applied before allow when both lists are set.
+- Filtering everything away returns an empty slice — a valid answer that
+  does **not** trigger fallback (fallback exists for blocks/challenges).
 
 ## Tune retries for flaky networks
 
@@ -230,10 +331,13 @@ e, err := browser.New(ctx) // finds Chrome/Edge/Chromium on the system
 if err != nil {
 	log.Fatal(err)
 }
-defer e.Close()
 
 // Search over rendered DOM — clears JS-gated walls:
 results, err := e.Search(ctx, "facebook")
+_ = e.Close() // close explicitly before any log.Fatal/os.Exit path
+if err != nil {
+	log.Fatal(err)
+}
 
 // Fetch a JS-rendered page — drop-in same return type as gosearch.Fetch:
 page, err := e.Fetch(ctx, "https://example.com/")

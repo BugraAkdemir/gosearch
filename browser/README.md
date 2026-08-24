@@ -11,7 +11,15 @@ it, and installing the core never pulls this in:
 
 ```bash
 go get github.com/BugraAkdemir/gosearch            # core only (zero extra deps)
-go get github.com/BugraAkdemir/gosearch/browser    # opt-in browser engine (+chromedp)
+```
+
+Installing the browser module:
+
+```bash
+# Until the first prefixed tag is published, pull the tip of main:
+go get github.com/BugraAkdemir/gosearch/browser@main
+# After a browser/vX.Y.Z tag exists (multi-module repos require prefixed tags):
+go get github.com/BugraAkdemir/gosearch/browser
 ```
 
 ## Usage
