@@ -7,6 +7,7 @@ import (
 
 	"github.com/BugraAkdemir/gosearch/internal/httpclient"
 	"github.com/BugraAkdemir/gosearch/internal/provider"
+	"github.com/BugraAkdemir/gosearch/internal/providers/bing"
 	"github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo"
 	"github.com/BugraAkdemir/gosearch/internal/providers/google"
 	"github.com/BugraAkdemir/gosearch/internal/providers/yandex"
@@ -27,10 +28,13 @@ import (
 // The same underlying HTTP client (with its cookie jar and rate limiter) is
 // reused across the fallback chain.
 //
-// All three engines are implemented. The DuckDuckGo parser is validated
+// All four engines are implemented. The DuckDuckGo parser is validated
 // against a real captured success page; the Google and Yandex parsers are
 // best-effort heuristics written against documented markup until a real
 // capture lands — see plan.md's exit criteria and AGENTS.md Known Pitfalls.
+// Bing served clean organic results even to a flagged datacenter IP during
+// the 2026-08-24 probe, but its parser is likewise best-effort until a real
+// capture lands.
 func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([]Result, error) {
 	if !engine.valid() {
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedEngine, int(engine))
@@ -71,6 +75,8 @@ var dispatch = func(ctx context.Context, e Engine, client *httpclient.Client, qu
 		return google.Search(ctx, client, query, maxResults)
 	case Yandex:
 		return yandex.Search(ctx, client, query, maxResults)
+	case Bing:
+		return bing.Search(ctx, client, query, maxResults)
 	default:
 		return nil, fmt.Errorf("%w: %d", ErrUnsupportedEngine, int(e))
 	}

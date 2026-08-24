@@ -4,19 +4,19 @@
 account to sign up for.**
 
 `gosearch` sends direct HTTP requests to public search engine result pages
-(Google, Yandex, DuckDuckGo) and parses the HTML itself, so a local-first Go
-program can search the web without paying for or depending on a hosted
-search API. It also ships a `Fetch()` function that pulls the clean,
+(Google, Yandex, Bing, DuckDuckGo) and parses the HTML itself, so a
+local-first Go program can search the web without paying for or depending on
+a hosted search API. It also ships a `Fetch()` function that pulls the clean,
 readable content out of any URL — title and main body text, with
 navigation/ads/footers stripped — for feeding page content into something
 like an LLM agent's context.
 
-> **Status: v0.1.** All three providers (`DuckDuckGo`, `Google`, `Yandex`)
-> plus `Fetch()` are implemented and hardened (transient-failure retries,
-> ordered fallback chain). DuckDuckGo is validated against a real captured
-> page; the Google and Yandex parsers are documented best-effort heuristics
-> pending real-capture validation — see [`plan.md`](./plan.md) and
-> `AGENTS.md`'s Known Pitfalls.
+> **Status: v0.1.** All four providers (`DuckDuckGo`, `Google`, `Yandex`,
+> `Bing`) plus `Fetch()` are implemented and hardened (transient-failure
+> retries, ordered fallback chain). DuckDuckGo is validated against a real
+> captured page; the Google, Yandex, and Bing parsers are documented
+> best-effort heuristics pending real-capture validation — see
+> [`plan.md`](./plan.md) and `AGENTS.md`'s Known Pitfalls.
 
 ---
 
@@ -32,8 +32,8 @@ a web browser would.
 
 ## What it does
 
-- **`Search(ctx, query, engine, ...Option)`** — queries Google, Yandex, or
-  DuckDuckGo and returns parsed `[]Result{Title, URL, Snippet}`.
+- **`Search(ctx, query, engine, ...Option)`** — queries Google, Yandex,
+  Bing, or DuckDuckGo and returns parsed `[]Result{Title, URL, Snippet}`.
 - **`Fetch(ctx, url, ...Option)`** — fetches any URL and extracts its main
   readable content (a simplified readability-style algorithm) into a
   `Page{URL, Title, Content}`, not a raw HTML dump.
@@ -71,7 +71,7 @@ go get github.com/BugraAkdemir/gosearch
 ```
 
 No API key, no config file, no signup required to use the plain-HTTP
-provider (`Google`, `Yandex`, `DuckDuckGo`).
+provider (`Google`, `Yandex`, `Bing`, `DuckDuckGo`).
 
 ## Usage
 
@@ -122,14 +122,15 @@ results, err := gosearch.Search(ctx, "facebook", gosearch.Google,
 
 Anti-bot strictness differs a lot per engine and per network. Live testing
 during this project's design phase (from a datacenter/cloud IP) got a
-captcha or JS-challenge from all three engines on the very first request —
-most likely IP-reputation driven, not something a well-behaved client can
-fully avoid. Expected reliability, roughly, from a normal residential
-network:
+captcha or JS-challenge from all three engines probed at the time on the very
+first request — most likely IP-reputation driven, not something a
+well-behaved client can fully avoid. Expected reliability, roughly, from a
+normal residential network:
 
 | Engine | Expected reliability | Why |
 |--------|----------------------|-----|
 | DuckDuckGo | Highest | Only engine with an official no-JS HTML endpoint; least aggressive captcha threshold. |
+| Bing | High | Served clean organic results even to a flagged datacenter IP; titles arrive behind a click-tracker that is unwrapped best-effort. |
 | Google | Moderate | No official no-JS endpoint; DOM is regionally A/B tested and changes without notice. |
 | Yandex | Lowest | Very aggressive geo/IP-based captcha gating, especially outside Russia. |
 
@@ -189,6 +190,7 @@ Full phased build-out, exit criteria, and design rationale live in
 3. Yandex provider
 4. Fallback/retry hardening
 5. Optional real-browser rendering subpackage
+6. Bing provider (post-v0.1 addition)
 
 ## Documentation
 

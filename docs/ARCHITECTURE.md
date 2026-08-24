@@ -22,12 +22,12 @@ control — see the "Reliability" section of the package doc comment in
                     │  public API surface │   Engine enum, Option, errors
                     └──────────┬──────────┘
                                │ dispatches to
-              ┌────────────────┼────────────────┐
-              ▼                ▼                ▼
-   internal/providers/  internal/providers/  internal/providers/
-      duckduckgo             google*             yandex*
-              │                                      
-              │ all providers share
+              ┌────────────────────────────┼────────────────────────────┐
+               ▼                ▼                ▼                ▼
+    internal/providers/  internal/providers/  internal/providers/  internal/providers/
+       duckduckgo             google*             yandex*             bing*
+               │                                      
+               │ all providers share
               ▼
     ┌──────────────────┐      ┌──────────────────┐
     │ internal/httpclient│     │  internal/htmlx  │
@@ -130,7 +130,8 @@ never be hand-edited or "cleaned up."
 |---|---|---|
 | DuckDuckGo | Implemented, tested against a real capture | Only engine with an official no-JS HTML endpoint; validated 2026-08-23 (`testdata/duckduckgo/real_success.html`) |
 | Google | Implemented, heuristic only — pending real-capture validation | Written against the documented basic-HTML markup (`/url?q=` redirects + h3 titles) and tested on synthetic + real-blocked fixtures; a real success page from a trusted network must still land at `testdata/google/real_success.html`, where `TestParseRealSuccessFixture` activates automatically |
-| Yandex | Implemented, heuristic only — pending real-capture validation | Most aggressive anti-bot gating of the three (sandbox is 302'd to showcaptcha); same synthetic-fixture + skip-until-capture pattern as Google, targeting `testdata/yandex/real_success.html` |
+| Yandex | Implemented, heuristic only — pending real-capture validation | Most aggressive anti-bot gating of the four (sandbox is 302'd to showcaptcha); same synthetic-fixture + skip-until-capture pattern as Google, targeting `testdata/yandex/real_success.html` |
+| Bing | Implemented, heuristic only — pending real-capture validation | Served clean organic results even to a flagged datacenter IP (2026-08-24 probe); parses `li.b_algo` containers, unwraps `/ck/a` click-tracker links (u= param or visible cite, best-effort). Synthetic fixture + skip-until-capture pattern targeting `testdata/bing/real_success.html` |
 
 ## Planned: `gosearch/browser` (Phase 5)
 

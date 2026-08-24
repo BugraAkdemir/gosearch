@@ -34,6 +34,6 @@ var (
 	ErrNoResults = serrors.ErrNoResults
 
 	// ErrUnsupportedEngine means Search was called with an Engine value that is
-	// not one of the defined constants (DuckDuckGo, Google, Yandex).
+	// not one of the defined constants (DuckDuckGo, Google, Yandex, Bing).
 	ErrUnsupportedEngine = serrors.ErrUnsupportedEngine
 )

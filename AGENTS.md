@@ -139,6 +139,17 @@ effectively permanent on the Go module proxy once fetched.
   `TestParseRealSuccessFixture` in `google_test.go` activates automatically
   (it skips itself while the file is absent).
 
+- **Bing probed 2026-08-24 (Session 4):** unlike Google/Yandex, Bing served a
+  clean HTTP 200 with ten organic results to a plain GET from this flagged
+  datacenter sandbox — no captcha, no JS requirement — making it the most
+  automation-tolerant engine after DuckDuckGo. `internal/providers/bing`
+  parses `li.b_algo` containers; title links ride Bing's `/ck/a`
+  click-tracker, and destinations are recovered from the `u=a1<base64url>`
+  query param when present, else rebuilt **best-effort** from the visible
+  `<cite>` display URL (Bing truncates long paths with "…", so tail segments
+  can be lost). Real-capture regression test pre-wired at
+  `testdata/bing/real_success.html` (skips until the file lands).
+
 ### Security
 - Block-detection markers (header names, redirect substrings, marker CSS
   classes) live in `internal/httpclient`. Treat them as untrusted external

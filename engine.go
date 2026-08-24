@@ -1,8 +1,8 @@
 package gosearch
 
 // Engine identifies which search engine Search should query. Pass one of the
-// exported constants (DuckDuckGo, Google, Yandex) as the primary engine, and
-// optionally more via WithFallback.
+// exported constants (DuckDuckGo, Google, Yandex, Bing) as the primary
+// engine, and optionally more via WithFallback.
 type Engine int
 
 const (
@@ -17,9 +17,17 @@ const (
 	Google
 
 	// Yandex queries Yandex Search. Yandex applies aggressive, geo/IP-based
-	// anti-bot gating, so it is the most likely of the three engines to return
+	// anti-bot gating, so it is the most likely of these engines to return
 	// ErrBlocked or ErrChallenge.
 	Yandex
+
+	// Bing queries Microsoft Bing Search. Bing's plain-HTML endpoint is the
+	// least aggressive of the four against automated clients — it served
+	// clean organic results to a flagged datacenter IP during testing where
+	// Google and Yandex challenged or blocked. Titles arrive wrapped in
+	// Bing's click-tracker; the real destination is recovered from the
+	// result's visible citation URL (best-effort, see the provider docs).
+	Bing
 )
 
 // String returns the engine's human-readable name, suitable for logs and error
@@ -32,6 +40,8 @@ func (e Engine) String() string {
 		return "google"
 	case Yandex:
 		return "yandex"
+	case Bing:
+		return "bing"
 	default:
 		return "unknown"
 	}
@@ -39,5 +49,5 @@ func (e Engine) String() string {
 
 // valid reports whether e is one of the defined engine constants.
 func (e Engine) valid() bool {
-	return e == DuckDuckGo || e == Google || e == Yandex
+	return e == DuckDuckGo || e == Google || e == Yandex || e == Bing
 }

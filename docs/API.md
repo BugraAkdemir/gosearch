@@ -18,12 +18,13 @@ func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([
 
 Queries `engine` for `query` and returns parsed results.
 
-- **All three engines (`DuckDuckGo`, `Google`, `Yandex`) are implemented.**
+- **All four engines (`DuckDuckGo`, `Google`, `Yandex`, `Bing`) are
+  implemented.**
   Reliability differs sharply per engine and per network: DuckDuckGo's parser
-  is validated against a real captured success page, while the Google and
-  Yandex parsers are best-effort heuristics —
-  those engines serve result markup only to clients they trust and change
-  their DOM without notice, so a parse miss is not necessarily a bug; capture
+  is validated against a real captured success page; the Google, Yandex, and
+  Bing parsers are best-effort heuristics — those engines change their DOM
+  without notice (Google/Yandex also gate results behind anti-bot checks), so
+  a parse miss is not necessarily a bug; capture
   the actual HTML first (see [`plan.md`](../plan.md) and `AGENTS.md`'s Known
   Pitfalls).
 - `WithFallback` engines are tried, in order, **only** when the current
@@ -97,6 +98,7 @@ const (
     DuckDuckGo Engine = iota
     Google
     Yandex
+    Bing
 )
 ```
 

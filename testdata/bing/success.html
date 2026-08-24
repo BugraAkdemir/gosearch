@@ -1,0 +1,36 @@
+<!doctype html>
+<!--
+  Synthetic Bing success fixture modeled on the observed server-rendered
+  organic markup: li.b_algo containers, h2 > a title links wrapped in Bing's
+  /ck/a click-tracker, .b_attribution > cite display URLs, div.b_caption >
+  p snippets. Covers the two destination-recovery paths (cite reconstruction;
+  truncation stripping) plus a result missing its citation (must be skipped).
+-->
+<html>
+<head><title>istanbul hava durumu - Arama</title></head>
+<body>
+<ol id="b_results">
+  <li class="b_algo">
+    <h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=tok1&amp;ntb=1">Meteoroloji İstanbul Hava Durumu</a></h2>
+    <div class="b_attribution"><cite>https://www.mgm.gov.tr › tahmin › il-ve-ilceler.aspx</cite></div>
+    <div class="b_caption"><p>Meteoroloji Genel Müdürlüğü İstanbul günlük ve saatlik hava durumu tahminleri.</p></div>
+  </li>
+  <li class="b_algo">
+    <h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=tok2&amp;ntb=1">İstanbul Hava Durumu (15 Günlük)</a></h2>
+    <div class="b_attribution"><cite>havadurumu15gunluk.xyz › istanbul</cite></div>
+    <div class="b_caption"><p>İstanbul için 15 günlük detaylı hava durumu tahmini.</p></div>
+  </li>
+  <!-- truncated cite: tail stripped, parent path kept -->
+  <li class="b_algo">
+    <h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=tok3&amp;ntb=1">AccuWeather İstanbul</a></h2>
+    <div class="b_attribution"><cite>https://www.accuweather.com › tr › tr-istanbul-weather…</cite></div>
+    <div class="b_caption"><p>AccuWeather İstanbul anlık durum ve dakikada bir güncellenen radar.</p></div>
+  </li>
+  <!-- no citation: destination unknowable client-side, must be skipped -->
+  <li class="b_algo">
+    <h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=tok4&amp;ntb=1">Kaynak bilinmeyen sonuç</a></h2>
+    <div class="b_caption"><p>Bu sonuçta cite yok.</p></div>
+  </li>
+</ol>
+</body>
+</html>

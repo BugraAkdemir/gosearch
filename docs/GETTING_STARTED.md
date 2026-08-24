@@ -70,11 +70,12 @@ empty `Content` — when you hit that, see [the browser engine](./RECIPES.md#whe
 | Engine | Status | Use it when |
 |---|---|---|
 | `gosearch.DuckDuckGo` | Validated against a real captured page | You want the most reliable default |
+| `gosearch.Bing` | Best-effort heuristic | You want Bing-specific results or a tolerant fallback engine |
 | `gosearch.Google` | Best-effort heuristic | You need Google-specific results |
 | `gosearch.Yandex` | Best-effort heuristic | You need Yandex-specific results |
 
 Reliability depends heavily on **your network's IP reputation**, not just the
-engine. From a typical residential connection all three usually work; from
+engine. From a typical residential connection all of them usually work; from
 datacenter/cloud IPs every engine may challenge or block you regardless of
 how polite the client is. See
 [Reliability, honestly](../README.md#reliability-honestly) in the README.

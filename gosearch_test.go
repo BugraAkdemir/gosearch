@@ -13,6 +13,7 @@ func TestEngineString(t *testing.T) {
 		DuckDuckGo: "duckduckgo",
 		Google:     "google",
 		Yandex:     "yandex",
+		Bing:       "bing",
 		Engine(99): "unknown",
 	}
 	for e, want := range cases {
@@ -23,7 +24,7 @@ func TestEngineString(t *testing.T) {
 }
 
 func TestEngineValid(t *testing.T) {
-	for _, e := range []Engine{DuckDuckGo, Google, Yandex} {
+	for _, e := range []Engine{DuckDuckGo, Google, Yandex, Bing} {
 		if !e.valid() {
 			t.Errorf("%v.valid() = false, want true", e)
 		}

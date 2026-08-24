@@ -1,7 +1,7 @@
 // Package gosearch performs web search and page-content extraction without an
 // API key. It works by fetching each search engine's public HTML result page
-// (DuckDuckGo, Google, Yandex) and parsing it directly, plus a Fetch function
-// that extracts the readable content of any URL.
+// (DuckDuckGo, Google, Yandex, Bing) and parsing it directly, plus a Fetch
+// function that extracts the readable content of any URL.
 //
 // It is built for local-first / zero-dependency Go programs (for example an
 // LLM agent's web-search tool) that cannot or will not depend on a hosted
@@ -20,9 +20,10 @@
 //
 // Anti-bot strictness varies by engine and by network. DuckDuckGo is the most
 // reliable (it is the only engine with an official no-JavaScript HTML
-// endpoint); Google is moderate; Yandex is the most likely to block. Requests
-// from datacenter/cloud IPs are far more likely to be blocked than requests
-// from a residential network.
+// endpoint); Google is moderate; Yandex is the most likely to block; Bing is
+// the most tolerant of automated clients after DuckDuckGo. Requests from
+// datacenter/cloud IPs are far more likely to be blocked than requests from a
+// residential network.
 package gosearch
 
 // Result is a single web-search result returned by Search.
