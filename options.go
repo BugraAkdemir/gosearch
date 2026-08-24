@@ -44,6 +44,10 @@ type config struct {
 	// markdown renders Fetch's extracted content as Markdown instead of plain
 	// text when true. Off by default, so existing callers see unchanged output.
 	markdown bool
+
+	// dates lets Search copy each provider result's best-effort freshness
+	// stamp into Result.Date when true. Off by default.
+	dates bool
 }
 
 // defaultConfig returns the baseline configuration used before any Option is
@@ -129,6 +133,16 @@ func WithHTTPClient(client *http.Client) Option {
 // This option is Fetch-only and is ignored by Search.
 func WithMarkdown() Option {
 	return func(c *config) { c.markdown = true }
+}
+
+// WithDates makes Search populate Result.Date with each engine's own
+// freshness stamp (best-effort, often absent). Off by default so callers who
+// need timeless results — historical queries, stable snapshots — never see
+// date metadata by accident; enabling it does not change what the engine is
+// asked or returns, it only surfaces metadata already on the page. This
+// option is Search-only and is ignored by Fetch.
+func WithDates() Option {
+	return func(c *config) { c.dates = true }
 }
 
 // WithFallback sets the ordered list of engines to try if the primary engine

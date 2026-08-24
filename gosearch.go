@@ -51,7 +51,7 @@ func Search(ctx context.Context, query string, engine Engine, opts ...Option) ([
 	for _, e := range engines {
 		results, err := dispatch(ctx, e, client, query, cfg.maxResults)
 		if err == nil {
-			return toResults(results), nil
+			return toResults(results, cfg.dates), nil
 		}
 		errs = append(errs, err)
 		// Only a block/challenge is worth trying the next engine for.
@@ -133,10 +133,16 @@ func newHTTPClient(cfg *config) (*httpclient.Client, error) {
 }
 
 // toResults converts internal provider results to the public Result type.
-func toResults(in []provider.Result) []Result {
+// Dates cross over only when the caller opted in via WithDates; providers
+// extract them regardless because the decision belongs to the caller, not
+// the parser.
+func toResults(in []provider.Result, withDates bool) []Result {
 	out := make([]Result, len(in))
 	for i, r := range in {
 		out[i] = Result{Title: r.Title, URL: r.URL, Snippet: r.Snippet}
+		if withDates {
+			out[i].Date = r.Date
+		}
 	}
 	return out
 }

@@ -21,6 +21,12 @@ type Result struct {
 	Title   string
 	URL     string
 	Snippet string
+
+	// Date is the result's freshness stamp as the engine rendered it (for
+	// example "2026-08-20" or "1 day ago"), extracted best-effort from the
+	// result container. Engines often omit it entirely; "" is normal. The
+	// root package strips this unless the caller opted in via WithDates.
+	Date string
 }
 
 // NormalizeURL returns a comparison key for URL-based deduplication. Search

@@ -88,6 +88,7 @@ provides one.
 | `Title` | Clickable heading text |
 | `URL` | Destination link |
 | `Snippet` | Short excerpt below the title (may be `""`) |
+| `Date` | Engine's own freshness stamp, verbatim (`"2026-08-20"`, `"1 day ago"`). Always `""` without `WithDates`; often `""` even with it — engines frequently omit dates on no-JS pages |
 
 ### `Page`
 
@@ -130,6 +131,7 @@ variadic args, applied in the order given.
 | `WithMaxResults(n int)` | Search only | Caps returned results. `0` (default) = no cap. Ignored by `Fetch`. |
 | `WithRetries(n int)` | Both | Transient failures (transport errors, HTTP 408/5xx) are retried with exponential backoff. Default `2`; `0`/negative disables. Blocks/challenges (`ErrBlocked`/`ErrChallenge`) are never retried — use `WithFallback` for those. |
 | `WithMarkdown()` | Fetch only | Renders `Page.Content` as GitHub-flavored Markdown (headings, lists, fenced code, links, emphasis) instead of plain text. Ideal when feeding page content to an LLM. Default off — output is unchanged without it. Ignored by `Search`. |
+| `WithDates()` | Search only | Fills `Result.Date` from each engine's freshness metadata (best-effort, often absent). Does not change the query or results — only surfaces metadata already on the page. Default off. Ignored by `Fetch`. |
 
 ## Errors
 

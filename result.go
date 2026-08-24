@@ -35,6 +35,12 @@ type Result struct {
 	// Snippet is the short description/excerpt shown under the title. It may
 	// be empty for some engines or result types.
 	Snippet string
+	// Date is the result's freshness stamp exactly as the engine rendered it
+	// (for example "2026-08-20" or "3 days ago") when the engine exposed one.
+	// It stays "" unless Search was called with WithDates, and even then many
+	// engines simply do not provide dates on their no-JavaScript pages — an
+	// empty Date is normal and must not be treated as an error.
+	Date string
 }
 
 // Page is the extracted, readable content of a URL returned by Fetch. It holds

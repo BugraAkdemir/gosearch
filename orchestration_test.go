@@ -87,6 +87,34 @@ func TestSearchNoResultsDoesNotFallback(t *testing.T) {
 	}
 }
 
+// TestSearchDatesOptIn pins the WithDates contract: providers may surface a
+// result's date, but it reaches the caller only when explicitly requested —
+// callers who need timeless results (historical queries, stable snapshots)
+// never see dates by accident.
+func TestSearchDatesOptIn(t *testing.T) {
+	withDispatch(t, func(_ context.Context, _ Engine, _ *httpclient.Client, _ string, _ int) ([]provider.Result, error) {
+		return []provider.Result{{
+			Title: "t", URL: "https://x", Snippet: "s", Date: "2026-08-20",
+		}}, nil
+	})
+
+	defaultResults, err := Search(context.Background(), "q", DuckDuckGo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultResults[0].Date != "" {
+		t.Errorf("default Date = %q, want empty without WithDates", defaultResults[0].Date)
+	}
+
+	dated, err := Search(context.Background(), "q", DuckDuckGo, WithDates())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dated[0].Date != "2026-08-20" {
+		t.Errorf("WithDates() Date = %q, want %q", dated[0].Date, "2026-08-20")
+	}
+}
+
 func TestFetchExtractsContent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`<html><head><title>My Page</title></head>

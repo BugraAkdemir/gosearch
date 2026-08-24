@@ -83,6 +83,7 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 		seen[key] = true
 		res := provider.Result{Title: title, URL: href}
 		if container := enclosingResult(a); container != nil {
+			res.Date = provider.ExtractDate(container)
 			if snip := htmlx.FindFirst(container, func(n *html.Node) bool {
 				return htmlx.Tag(n, atom.A) && htmlx.HasClass(n, "result__snippet")
 			}); snip != nil {

@@ -96,6 +96,9 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 		seen[key] = true
 
 		res := provider.Result{Title: title, URL: dest, Snippet: resultSnippet(a)}
+		if c := enclosingResult(a); c != nil {
+			res.Date = provider.ExtractDate(c)
+		}
 		out = append(out, res)
 		if maxResults > 0 && len(out) >= maxResults {
 			break

@@ -53,6 +53,9 @@ a web browser would.
 - **Near-duplicate collapsing** — engines often list one page under several
   URL spellings (percent-encoded vs literal `İ`/`I`, reordered parameters);
   those collapse to a single result with the original spelling preserved.
+- **Opt-in freshness dates** — `WithDates()` fills `Result.Date` with each
+  engine's own stamp when it provides one; off by default, so callers who
+  need timeless results never see date metadata by accident.
 
 ## What it deliberately does not do
 

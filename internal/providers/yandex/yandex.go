@@ -96,6 +96,7 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 		seen[key] = true
 
 		res := provider.Result{Title: title, URL: dest}
+		res.Date = provider.ExtractDate(item)
 		if sn := htmlx.FindFirst(item, func(n *html.Node) bool {
 			return htmlx.HasClass(n, "organic__text")
 		}); sn != nil {

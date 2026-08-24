@@ -165,6 +165,38 @@ func newTestClient(t *testing.T) *httpclient.Client {
 	return c
 }
 
+// TestParseExtractsDate pins date extraction: Bing stamps fresh results with
+// a news_dt span inside the caption; generic pages may carry a <time
+// datetime>. Both must land in Result.Date; absence stays "".
+func TestParseExtractsDate(t *testing.T) {
+	page := `<!doctype html><html><body><ol id="b_results">
+<li class="b_algo">
+  <h2><a href="https://www.bing.com/ck/a?!&&amp;&amp;p=tok1">Taze</a></h2>
+  <div class="b_attribution"><cite>https://ex.com/a</cite></div>
+  <div class="b_caption"><p><span class="news_dt">1 day ago</span> · Guncel icerik metni burada uzayarak devam ediyor.</p></div>
+</li>
+<li class="b_algo">
+  <h2><a href="https://www.bing.com/ck/a?!&&amp;&amp;p=tok2">Zamanli</a></h2>
+  <div class="b_attribution"><cite>https://ex.com/b</cite></div>
+  <time datetime="2026-08-20">Aug 20</time>
+</li>
+</ol></body></html>`
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatal(err)
+	}
+	results := parse(doc, 0)
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+	if got, want := results[0].Date, "1 day ago"; got != want {
+		t.Errorf("news_dt Date = %q, want %q", got, want)
+	}
+	if got, want := results[1].Date, "2026-08-20"; got != want {
+		t.Errorf("<time datetime> Date = %q, want %q", got, want)
+	}
+}
+
 func TestSearchEndToEndSuccess(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("q") == "" {

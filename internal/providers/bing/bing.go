@@ -105,6 +105,7 @@ func parse(doc *html.Node, maxResults int) []provider.Result {
 		}); sn != nil {
 			res.Snippet = strings.TrimSpace(htmlx.Text(sn))
 		}
+		res.Date = provider.ExtractDate(item)
 		out = append(out, res)
 		if maxResults > 0 && len(out) >= maxResults {
 			break
