@@ -30,6 +30,81 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 4 (2026-08-24) — Bing provider built; stale handoff + broken tree repaired
+
+handoff.md had NO record of it, but the working tree held unfinished,
+uncommitted Bing work (user remembered correctly). Found via git status +
+grep: `internal/providers/bing/` and `testdata/bing/success.html` untracked,
+`engine.go`/`gosearch.go` modified — and the tree was BROKEN in two places:
+
+1. `gosearch.go` had lost its `google`/`yandex`/`readability` imports
+   (root package did not compile: undefined google/yandex/readability).
+   Cause unknown (mid-edit accident from a prior session); fixed by
+   restoring the three imports alongside the new bing import.
+2. `bing_test.go`'s `TestParseRealSuccessFixture` was missing one closing
+   brace on its range loop → package syntax error; fixed.
+
+What the session then completed for the Bing feature:
+
+- **Parser** (`internal/providers/bing/bing.go`): scopes every lookup to
+  `li.b_algo` containers (no cross-result leakage), title = first `a` under
+  `h2`, snippet = first `<p>`. Destination recovery priority:
+  `/ck/a` click-tracker's `u=a1<base64url>` param (exact, `!`→`/` swap) →
+  else rebuild from visible `<cite>` ("host › dir › page", scheme promoted
+  to https, "…"/"..." truncation stripped — best-effort, tail segments can
+  be lost). Cite-less results skipped; dedup + maxResults cap +
+  ErrNoResults per house convention.
+- **Probe finding:** Bing served clean HTTP 200 with organic results to a
+  plain GET from this flagged datacenter IP (2026-08-24) — most tolerant
+  engine after DuckDuckGo. Logged in AGENTS.md Known Pitfalls.
+- **Wiring:** `Engine.Bing` (+String/valid), dispatch case in gosearch.go,
+  root docs updated to four engines (package doc reliability paragraph,
+  Search doc, ErrUnsupportedEngine comment), gosearch_test String/valid
+  tables gained Bing.
+- **Docs same-commit** (rule 9): README status block/install/reliability
+  table (Bing row added)/roadmap item 6; docs/API.md Engine const block;
+  docs/GETTING_STARTED.md engine table; docs/ARCHITECTURE.md graph + status
+  table.
+- **Still open:** real-capture validation at
+  `testdata/bing/real_success.html` — skip-until-capture test pre-wired
+  (skip message carries the exact curl command; any network works, even
+  this sandbox per the probe). plan.md deliberately untouched: Bing is
+  post-v0.1 user-requested scope beyond the original five phases; README
+  roadmap records it as item 6.
+
+**Commits:** `cabaf70 feat(providers): add Bing engine`, plus this handoff
+docs commit.
+
+**Verification (pasted):**
+
+```
+$ go build ./... && go vet ./... && gofmt -l . ; go test -race -count=1 ./...
+ok  	github.com/BugraAkdemir/gosearch	1.027s
+?  	github.com/BugraAkdemir/gosearch/examples/basic	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/e2e	1.034s
+?  	github.com/BugraAkdemir/gosearch/internal/htmlx	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.397s
+?  	github.com/BugraAkdemir/gosearch/internal/provider	[no test files]
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/bing	1.031s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.037s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/google	1.035s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/yandex	1.033s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	1.023s
+?  	github.com/BugraAkdemir/gosearch/internal/serrors	[no test files]
+(gofmt printed nothing)
+$ $(go env GOPATH)/bin/golangci-lint run   # root module
+0 issues.
+browser module: build/vet/test ok (default tags)
+```
+
+**Next Session:** nothing planned. Open threads carried forward: (a)
+real-capture fixtures — now FOUR pending: Google, Yandex (trusted-network
+requirement stands) and Bing (any network works, incl. this sandbox),
+(b) user-run browser integration test on a browser-equipped machine,
+(c) publish decision for the browser module (`browser/vX.Y.Z` prefixed tag;
+explicit fresh ask required), plus new (d) push `cabaf70` to origin when
+user approves — it is local-only right now.
+
 ## Session 3, leg 6 (same day) — Phase 5 built: gosearch/browser separate module
 
 User asked for the optional browser engine AND the ability to bake it into a
