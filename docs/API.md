@@ -37,6 +37,11 @@ Queries `engine` for `query` and returns parsed results.
   `errors.Is(err, ErrChallenge)` still report `true` through the join.
 - The same underlying HTTP client (cookie jar + rate limiter) is reused
   across the whole fallback chain for one call.
+- Results whose URLs differ only in spelling collapse into one result:
+  percent-encoded vs literal non-ASCII query values, dotted vs undotted
+  capital İ/I (observed live on Bing), parameter order, host case, fragments,
+  and default ports are treated as the same page; the first-seen original
+  spelling is what you get in `Result.URL`.
 
 ```go
 results, err := gosearch.Search(ctx, "facebook", gosearch.DuckDuckGo,
@@ -61,6 +66,9 @@ navigation/ads/boilerplate stripped) into a `Page`.
   [the browser recipe](./RECIPES.md#when-plain-http-is-not-enough-the-browser-engine).
 - Returns `ErrBlocked`/`ErrChallenge` if the server responds with an
   anti-bot page instead of real content.
+- Pass `WithMarkdown()` to receive `Content` as Markdown (headings, lists,
+  fenced code, links, emphasis) instead of plain text — the natural format
+  for feeding page content to an LLM.
 - `WithFallback` and `WithMaxResults` are Search-only options; `Fetch`
   ignores them.
 
@@ -121,6 +129,7 @@ variadic args, applied in the order given.
 | `WithFallback(engines ...Engine)` | Search only | Ordered fallback chain, engaged only on `ErrBlocked`/`ErrChallenge`. Ignored by `Fetch`. |
 | `WithMaxResults(n int)` | Search only | Caps returned results. `0` (default) = no cap. Ignored by `Fetch`. |
 | `WithRetries(n int)` | Both | Transient failures (transport errors, HTTP 408/5xx) are retried with exponential backoff. Default `2`; `0`/negative disables. Blocks/challenges (`ErrBlocked`/`ErrChallenge`) are never retried — use `WithFallback` for those. |
+| `WithMarkdown()` | Fetch only | Renders `Page.Content` as GitHub-flavored Markdown (headings, lists, fenced code, links, emphasis) instead of plain text. Ideal when feeding page content to an LLM. Default off — output is unchanged without it. Ignored by `Search`. |
 
 ## Errors
 

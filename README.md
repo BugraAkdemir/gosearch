@@ -36,17 +36,23 @@ a web browser would.
   Bing, or DuckDuckGo and returns parsed `[]Result{Title, URL, Snippet}`.
 - **`Fetch(ctx, url, ...Option)`** — fetches any URL and extracts its main
   readable content (a simplified readability-style algorithm) into a
-  `Page{URL, Title, Content}`, not a raw HTML dump.
+  `Page{URL, Title, Content}`, not a raw HTML dump. Pass `WithMarkdown()` to
+  get the content as Markdown instead of plain text — headings, lists, code
+  fences, links, and emphasis preserved (ideal for LLM context).
 - **Engine fallback** — `WithFallback(engine, engine, ...)` tries engines in
   the order you specify and moves to the next one if the current one reports
   it's blocked, instead of failing outright.
 - **One `Option` type** — `WithTimeout`, `WithProxy`, `WithHeader`,
-  `WithCookies`, `WithUserAgent`, and `WithHTTPClient` work on both `Search`
-  and `Fetch`; `WithFallback` and `WithMaxResults` are search-only and are
-  ignored by `Fetch`.
+  `WithCookies`, `WithUserAgent`, `WithHTTPClient`, and `WithMarkdown` work on
+  both `Search` and `Fetch` where meaningful (`WithMarkdown` is Fetch-only);
+  `WithFallback` and `WithMaxResults` are search-only and are ignored by
+  `Fetch`.
 - **Honest failure signaling** — if an engine's anti-bot system blocks the
   request, you get a typed `ErrBlocked`/`ErrChallenge` error, not a silent
   empty result or a parse panic on a captcha page.
+- **Near-duplicate collapsing** — engines often list one page under several
+  URL spellings (percent-encoded vs literal `İ`/`I`, reordered parameters);
+  those collapse to a single result with the original spelling preserved.
 
 ## What it deliberately does not do
 

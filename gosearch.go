@@ -87,6 +87,10 @@ var dispatch = func(ctx context.Context, e Engine, client *httpclient.Client, qu
 // yield an empty Page.Content. If the server responds with an anti-bot page
 // (for example HTTP 403/429), Fetch returns ErrBlocked/ErrChallenge.
 //
+// With Markdown opted in (WithMarkdown), Page.Content carries GitHub-flavored
+// Markdown with headings, lists, code fences, links, and emphasis preserved;
+// the default remains plain text.
+//
 // Search-only options (WithFallback, WithMaxResults) are ignored by Fetch.
 func Fetch(ctx context.Context, url string, opts ...Option) (*Page, error) {
 	cfg := apply(opts)
@@ -103,7 +107,12 @@ func Fetch(ctx context.Context, url string, opts ...Option) (*Page, error) {
 		return nil, fmt.Errorf("gosearch: fetch %q: %w", url, err)
 	}
 
-	art, err := readability.Extract(resp.Body)
+	var art *readability.Article
+	if cfg.markdown {
+		art, err = readability.ExtractMarkdown(resp.Body)
+	} else {
+		art, err = readability.Extract(resp.Body)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("gosearch: fetch %q: %w", url, err)
 	}

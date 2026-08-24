@@ -122,3 +122,37 @@ func TestFetchDetectsBlocked(t *testing.T) {
 		t.Fatalf("err = %v, want ErrBlocked on HTTP 403", err)
 	}
 }
+
+// TestFetchMarkdownOption pins the WithMarkdown contract: opting in renders
+// Page.Content as Markdown (structure preserved), while the default call keeps
+// returning plain text.
+func TestFetchMarkdownOption(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`<html><head><title>MD</title></head><body>
+			<article>
+			<h2>Kurulum</h2>
+			<p>This is the real body prose, with commas, long enough to score as the main content of the page.</p>
+			<ul><li>first step</li><li>second step</li></ul>
+			</article></body></html>`))
+	}))
+	defer srv.Close()
+
+	mdPage, err := Fetch(context.Background(), srv.URL, WithMarkdown())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"## Kurulum", "- first step\n- second step"} {
+		if !strings.Contains(mdPage.Content, want) {
+			t.Errorf("markdown Content missing %q; got:\n%s", want, mdPage.Content)
+		}
+	}
+
+	plainPage, err := Fetch(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(plainPage.Content, "## Kurulum") ||
+		strings.Contains(plainPage.Content, "- first step") {
+		t.Errorf("default Fetch leaked markdown:\n%s", plainPage.Content)
+	}
+}

@@ -40,6 +40,10 @@ type config struct {
 	// error, HTTP 408/5xx) is retried before the failure is final. Blocks
 	// are never retried. -1 disables retrying entirely.
 	retries int
+
+	// markdown renders Fetch's extracted content as Markdown instead of plain
+	// text when true. Off by default, so existing callers see unchanged output.
+	markdown bool
 }
 
 // defaultConfig returns the baseline configuration used before any Option is
@@ -115,6 +119,16 @@ func WithCookies(cookies ...*http.Cookie) Option {
 // options are not applied on top of a client supplied this way.
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *config) { c.httpClient = client }
+}
+
+// WithMarkdown makes Fetch return its extracted main content as
+// GitHub-flavored Markdown in Page.Content — headings as # levels, lists as
+// bullets, code blocks fenced, links as [text](href), emphasis preserved —
+// instead of plain text. Structure is what makes page content useful to LLM
+// consumers; callers who want bare text simply omit this option (the default).
+// This option is Fetch-only and is ignored by Search.
+func WithMarkdown() Option {
+	return func(c *config) { c.markdown = true }
 }
 
 // WithFallback sets the ordered list of engines to try if the primary engine
