@@ -151,6 +151,14 @@ effectively permanent on the Go module proxy once fetched.
   `testdata/bing/real_success.html` (skips until the file lands).
 
 ### Security
+- **FOUND & FIXED 2026-08-24 (live probe, en.wikipedia.org):** `readability`'s
+  noise markers ("header", "menu", "nav"…) substring-matched against
+  `<html>`/`<body>` feature-flag classes
+  (`vector-feature-language-in-header-enabled`) → the ROOT was removed and
+  EVERY page returned empty content. Fix: root elements are exempt from
+  noise removal (`TestExtractSurvivesNoiseMarkerClassesOnRoot` pins it).
+  Lesson: the synthetic article fixture could never catch this — only a real
+  page could; keep live probes in the loop after extractor changes.
 - Block-detection markers (header names, redirect substrings, marker CSS
   classes) live in `internal/httpclient`. Treat them as untrusted external
   input — never `eval`/execute anything from a fetched page; we only ever

@@ -30,6 +30,52 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 4, leg 3 (same day) — live verification of the quality package; real Wikipedia bug found & fixed
+
+User demanded comprehensive REAL testing: every new feature, options ON and
+OFF, across all providers. Ran a throwaway `.probe` program (written, run,
+deleted) through 6 live scenarios against Bing/DuckDuckGo/Google/Yandex.
+Final run: **ALL CHECKS PASSED** (Google/Yandex CHALLENGE from this IP as
+always — vacuous there).
+
+- S1 defaults (Bing+DDG): `Date==""` on every result without WithDates ✓;
+  zero near-duplicate URLs (dedup active) ✓.
+- S2 WithDates(): Bing 5/9 results dated ("1 day ago", "20 hours ago") ✓;
+  DDG 0/10 (engine exposes none on no-JS page — documented behavior) ✓.
+- S3 WithBlockedDomains("wikipedia.org"): zero wiki hosts survive on both ✓.
+  Probe lesson recorded: cross-call result-count comparisons are NOT an
+  invariant — live SERPs return 7 vs 10 between requests; removed that bad
+  assertion rather than "fixing" the library.
+- S4 WithAllowedDomains(<top host>): only that host + subdomains survive ✓.
+- S5a Fetch MD off/on (Wikipedia Facebook): OFF = zero markdown markers,
+  non-empty text; ON = headings (\n# ×7) + links (](http ×51); titles equal ✓.
+- S5b Fetch go.dev blog: MD ON has fenced code blocks + [text](href) links,
+  OFF leaks neither ✓.
+
+**REAL BUG FOUND & FIXED** (`2af2271 fix(readability)`): Wikipedia's
+`<html class="...vector-feature-language-in-header-enabled...">` made
+noise-marker substring matching remove the ROOT element → EVERY Fetch
+returned empty content on such pages (pre-existing bug, not from this
+package). Fixed by exempting html/body in removeNoise; regression test
+`TestExtractSurvivesNoiseMarkerClassesOnRoot` pins the exact shape. Two
+initial FAILs during verification were probe bugs (invalid cross-call
+invariant; marker-key mismatch) — diagnosed and fixed the probes, not the
+library. AGENTS.md Security section records the lesson: keep live probes in
+the loop after extractor changes.
+
+**Verification (pasted):**
+
+```
+probe final run : RESULT: ALL CHECKS PASSED
+$ go build/vet ok ; gofmt -l . empty ; go test -race -count=1 ./...
+ok  root/e2e/httpclient/provider/providers×4/readability (~1.0s each)
+$ golangci-lint run → 0 issues.
+```
+
+**Next Session:** unchanged open threads (real captures ×3 engines, browser
+integration test, browser module publish decision). Local commits pending
+push: `2af2271`, `ae5f119`, plus this docs commit.
+
 ## Session 4, leg 2 (same day) — quality package: dedup + WithMarkdown + WithDates + domain policy
 
 User brainstormed quality improvements with an LLM-agent consumer in mind and
