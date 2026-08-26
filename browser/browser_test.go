@@ -79,6 +79,36 @@ func TestSafeJoinContainsTraversal(t *testing.T) {
 	}
 }
 
+// TestFindCachedBinaryFindsAPriorDownloadWithoutNetwork pins the actual bug
+// this function exists to fix: IsInstalled()-style callers never set
+// AllowDownload, so before findCachedBinary existed, resolveExecutable had
+// no way to see a binary a PRIOR Install() call had already downloaded —
+// only discover()'s system paths. Reported live: browser.Install()
+// succeeded on a Raspberry Pi (linux/arm64, via the Playwright fallback),
+// yet the very next IsInstalled() check still reported false.
+func TestFindCachedBinaryFindsAPriorDownloadWithoutNetwork(t *testing.T) {
+	dir := t.TempDir()
+	if p := findCachedBinary(dir); p != "" {
+		t.Fatalf("findCachedBinary(empty cache) = %q, want \"\"", p)
+	}
+
+	// Mirrors what downloadEngine's Playwright branch leaves behind:
+	// engineCacheRoot/<prefixed-dir>/<canonical binary name>.
+	nested := filepath.Join(dir, "playwright-1241", "chrome-linux")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	binPath := filepath.Join(nested, engineBinaryName+exeSuffix())
+	if err := os.WriteFile(binPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	got := findCachedBinary(dir)
+	if got != binPath {
+		t.Errorf("findCachedBinary(populated cache) = %q, want %q", got, binPath)
+	}
+}
+
 func TestUnzipPreservesExecutableBit(t *testing.T) {
 	dir := t.TempDir()
 	zipPath := filepath.Join(dir, "engine.zip")

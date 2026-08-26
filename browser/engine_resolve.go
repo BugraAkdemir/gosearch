@@ -83,7 +83,11 @@ func AllowDownload(v bool) Option {
 // resolveExecutable returns the path of the chromium-family executable to
 // drive: an explicitly supplied path wins; then the embedded archive (when
 // this binary was built with the gosearch_embed_engine build tag); then
-// system discovery; then, if downloads are allowed, chrome-headless-shell.
+// system discovery; then a previously-downloaded engine already sitting in
+// the cache (no network needed — this is what makes IsInstalled-style calls,
+// which never set AllowDownload, correctly report "yes" right after a
+// successful Install instead of only ever seeing discover()'s system paths);
+// then, if downloads are allowed, chrome-headless-shell.
 func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 	if cfg.executable != "" {
 		return cfg.executable, nil
@@ -98,6 +102,9 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 	if p := discover(); p != "" {
 		return p, nil
 	}
+	if p := findCachedBinary(cfg.cacheDir); p != "" {
+		return p, nil
+	}
 	if cfg.allowDownload {
 		p, err := downloadEngine(ctx, cfg.cacheDir)
 		if err != nil {
@@ -108,6 +115,22 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 	return "", fmt.Errorf("%w: tried WithExecutable?=%v, embedded archive?=%v, system paths (%s)",
 		ErrNoBrowserFound, cfg.executable != "", len(embeddedEngineZip) > 0,
 		strings.Join(discoverCandidates(), ", "))
+}
+
+// findCachedBinary reports whether an engine from an earlier download
+// (chrome-for-testing OR the linux/arm64 Playwright fallback — both land
+// under engineCacheRoot and both end up named engineBinaryName after
+// downloadEngine's rename step) already sits in the cache, without making
+// any network call. A no-op MkdirAll (engineCacheRoot's side effect) is the
+// only filesystem write; a missing/unreadable cache root is treated as
+// "nothing cached" rather than an error, matching discover()'s best-effort
+// contract.
+func findCachedBinary(cacheDirOverride string) string {
+	root, err := engineCacheRoot(cacheDirOverride)
+	if err != nil {
+		return ""
+	}
+	return findEngineBinary(root)
 }
 
 // normalizedUserAgent returns the User-Agent the browser declares. chrome-
