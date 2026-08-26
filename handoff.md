@@ -30,6 +30,123 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 5 — browser/v0.2.0: linux/arm64 Chromium download fix; dual-module dedup design decided but not yet implemented
+
+Triggered from the **memo** repo: a user self-hosting Memo on a Raspberry Pi
+reported "Chromium'u İndir" (Install Chromium) failing with a generic error.
+Root-caused there first (see memo's own handoff.md for that leg), traced
+into this repo: `browser/cfd.go`'s `platformSlug()` never mapped
+`linux/arm64` — Google's chrome-for-testing CDN, the only download source
+`browser.Install` had, genuinely never publishes an official linux/arm64
+build. On a Pi with no system Chromium already present, download always
+failed with `"unsupported platform linux/arm64"`.
+
+**Fix** (branch `fix/arm64-linux-browser-download`, PR
+[#1](https://github.com/BugraAkdemir/gosearch/pull/1), merged
+`e71681c`): `downloadEngine` now special-cases `linux/arm64` to a separate
+download source — Microsoft's Playwright CDN, which does build and host a
+`chromium-headless-shell` for that platform
+(`cdn.playwright.dev/builds/chromium/{revision}/chromium-headless-shell-linux-arm64.zip`).
+Playwright names the extracted binary `headless_shell` (no `chrome-`
+prefix); it's renamed to the package's canonical `chrome-headless-shell`
+post-extraction so `findEngineBinary` and everything downstream stays a
+single-source-of-truth lookup with zero second-provider awareness anywhere
+else. Revision pinned by hand (no runtime "latest stable" manifest exists
+for Playwright's CDN the way chrome-for-testing has one) — see the comment
+on `playwrightHeadlessShellRevision` in `cfd.go` for where to check for
+updates. Also added `ErrUnsupportedPlatform` sentinel for the remaining
+genuinely-unsupported combos (e.g. `linux/386`), so callers can
+`errors.Is` instead of parsing message text — memo's `browserengine.go`
+now wraps it with an actionable "install a system Chromium and retry" hint.
+
+**Gotcha hit and fixed while writing tests (worth remembering):** the first
+test file was named `cfd_arm64_test.go`. Go's build system treats a
+filename ending in `_GOARCH` (after stripping `_test`) as an **implicit
+build constraint** — `cfd_arm64_test.go` was silently excluded from every
+build on this (amd64) machine, `go test ./...` reported "ok" with the file
+compiled in *neither* the build nor the test binary, no error, no warning.
+`go build ./...` and `go vet ./...` both stayed green throughout because
+neither compiles `_test.go` files. Caught only by checking `go list -f
+'{{.TestGoFiles}}' .` and noticing the file wasn't listed. Renamed to
+`playwright_download_test.go` and the 3 new tests immediately started
+running. **Lesson: never let a test filename's last underscore-segment
+collide with a real GOOS/GOARCH name** (arm64, amd64, linux, darwin,
+windows, 386, etc.) unless the implicit constraint is actually intended.
+
+Tagged `browser/v0.2.0` (annotated, minor bump — new platform support, not
+just a patch) on the merged commit, pushed. Root module untouched this
+session (still `v0.2.0`, unrelated to this browser-only tag).
+
+**Verification (pasted):**
+```
+$ cd browser && go build ./... && go vet ./... && go test -race -count=1 ./...
+ok  	github.com/BugraAkdemir/gosearch/browser	1.012s
+$ gofmt -l .        → (empty)
+$ golangci-lint run ./... → 0 issues.
+$ gh pr checks 1
+browser  pass  23s
+test     pass  24s
+```
+
+**Open thread, decided but NOT implemented — next session starts here:**
+mid-session the user pointed out `browser/`'s `Fetch()` reimplements its own
+JS-side readability heuristic (`render_scripts.go`'s `fetchExtractJS`)
+completely independent of the root module's Go/DOM-based
+`internal/readability` (and its `ExtractMarkdown`) — meaning any future
+Fetch feature (Markdown was the concrete worry) has to be written twice.
+Discussed two options: (A) keep the two Go modules separate (preserves the
+deliberate "core module stays dependency-free, chromedp never touches it"
+guarantee from the Phase 5 decision) but make `browser/fetch.go` grab
+rendered HTML via chromedp (`OuterHTML`/equivalent) and hand it to the
+SAME `internal/readability.Extract`/`ExtractMarkdown` the root `Fetch` uses
+— legal because Go's `internal/` visibility is path-prefix-based, not
+module-based, so `browser`'s import path (`.../gosearch/browser`) can
+already reach `.../gosearch/internal/readability` across the module
+boundary with no new dependency. (B) actually merge into one `go.mod` with
+chromedp behind a build tag — rejected: breaks the core-stays-light
+guarantee for every consumer's `go list -m all`/SBOM regardless of tag
+state, build tags are fragile for library consumers (silent stub instead
+of a compile error if the tag is forgotten), and couples the two modules'
+release cadence back together, which recreates a different flavor of the
+same "change it twice" friction.
+
+**User picked (A), separate modules kept.** Not started — the session was
+interrupted before Phase 4 (final plan) was written. Exploration already
+done and doesn't need repeating:
+- `internal/readability.Extract(htmlBytes []byte) (*Article, error)` —
+  `internal/readability/readability.go:50`; `ExtractMarkdown` — same
+  signature, `internal/readability/markdown.go:30`. `Article{Title,
+  Content string}`.
+- `browser/fetch.go:27-54` is the whole current `Engine.Fetch` — replace
+  the `chromedp.Evaluate(fetchExtractJS, &raw)` step with a chromedp action
+  that captures the rendered `<html>` outerHTML (need to also re-derive
+  `finalURL`, currently read from the JS blob's `url` field — a separate
+  `chromedp.Location(&finalURL)`-style action or equivalent).
+- Root's HTTP fetch caps body at `maxBodyBytes = 8 << 20` (8 MiB) —
+  `internal/httpclient/client.go:28` (unexported, same value should be
+  mirrored as a local const in `browser/fetch.go`, not imported, since it's
+  unexported) — the browser path needs an equivalent cap on captured HTML
+  (a rendered page's DOM, e.g. infinite-scroll, can grow larger than a raw
+  HTTP body ever would) with UTF-8/tag-safe truncation, not a raw byte
+  slice cut.
+- Needs a `markdown bool` field threaded through `browser`'s
+  `engineConfig`/`Option` (`engine_resolve.go`) and `Engine` struct
+  (`engine.go:35-49`) — mirrors root's `WithMarkdown()` option name/shape
+  but is Engine-level (set at `New()` time) like every other browser
+  Option, not per-Fetch-call.
+- `browser/search.go`'s own JS extractor (`searchExtractJS`,
+  `render_scripts.go:8-30`) is explicitly OUT of scope for this — it's a
+  Google-DOM scraping heuristic with nothing equivalent at root to share
+  against, unrelated to the Fetch/Markdown duplication complaint.
+- No existing unit test exercises `Engine.Fetch`'s extraction path at all
+  (it's chromedp-dependent, currently only reachable via the
+  `-tags integration` `TestLiveSearchAndFetch` in `integration_test.go`) —
+  after the fix, extraction *correctness* doesn't need new tests (already
+  covered by `internal/readability`'s own suite at root); what needs
+  covering here is the *wiring* (does `Fetch` branch on `e.markdown`
+  correctly, does the size cap apply) plus extending the integration test
+  with a Markdown-mode assertion against a real JS-rendered page.
+
 ## Session 4, leg 4 (same day) — v0.2.0 + browser/v0.1.0 released
 
 User pushed all pending work themselves, then explicitly asked for the new
