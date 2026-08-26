@@ -47,12 +47,27 @@ func TestDownloadPlaywrightHeadlessShellLinuxARM64(t *testing.T) {
 	defer func() { playwrightCDNBase = realBase }()
 
 	cacheDir := t.TempDir()
-	p, err := downloadPlaywrightHeadlessShellLinuxARM64(context.Background(), cacheDir)
+	var progressCalls int
+	var lastDownloaded, lastTotal int64
+	onProgress := func(downloaded, total int64) {
+		progressCalls++
+		lastDownloaded, lastTotal = downloaded, total
+	}
+	p, err := downloadPlaywrightHeadlessShellLinuxARM64(context.Background(), cacheDir, onProgress)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if filepath.Base(p) != engineBinaryName+exeSuffix() {
 		t.Errorf("downloaded binary path = %q, want basename %q (renamed from headless_shell)", p, engineBinaryName+exeSuffix())
+	}
+	if progressCalls == 0 {
+		t.Error("onProgress was never called during an actual network download")
+	}
+	if lastTotal != int64(len(payload)) {
+		t.Errorf("final onProgress total = %d, want the response's Content-Length %d", lastTotal, len(payload))
+	}
+	if lastDownloaded != lastTotal {
+		t.Errorf("final onProgress downloaded = %d, want it to equal total %d", lastDownloaded, lastTotal)
 	}
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(p)
@@ -74,7 +89,9 @@ func TestDownloadPlaywrightHeadlessShellLinuxARM64(t *testing.T) {
 		t.Error("second call re-hit the network instead of reusing the cached binary")
 		w.WriteHeader(http.StatusInternalServerError)
 	})
-	p2, err := downloadPlaywrightHeadlessShellLinuxARM64(context.Background(), cacheDir)
+	p2, err := downloadPlaywrightHeadlessShellLinuxARM64(context.Background(), cacheDir, func(int64, int64) {
+		t.Error("onProgress fired on a cache-hit call — no network download happened")
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +120,7 @@ func TestDownloadEngineDispatchesToPlaywrightOnLinuxARM64(t *testing.T) {
 	setGOOSArch("linux", "arm64")
 
 	cacheDir := t.TempDir()
-	p, err := downloadEngine(context.Background(), cacheDir)
+	p, err := downloadEngine(context.Background(), cacheDir, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,7 +139,7 @@ func TestDownloadEngineTrulyUnsupportedPlatformWrapsSentinel(t *testing.T) {
 	defer restoreGOOSArch(gotOS, gotArch)
 	setGOOSArch("linux", "386")
 
-	_, err := downloadEngine(context.Background(), t.TempDir())
+	_, err := downloadEngine(context.Background(), t.TempDir(), nil)
 	if err == nil {
 		t.Fatal("want an error for linux/386, got nil")
 	}

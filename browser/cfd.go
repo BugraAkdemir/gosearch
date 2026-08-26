@@ -35,7 +35,7 @@ const playwrightHeadlessShellRevision = "1241" // Chrome for Testing 152.0.7977.
 // playwrightCDNBase is a var (not const) so tests can point it at a fake
 // server; chrome-for-testing's cfdManifestURL has no equivalent test seam
 // today because nothing exercises its download path outside integration
-// tests — this one does (see cfd_arm64_test.go).
+// tests — this one does (see playwright_download_test.go).
 var playwrightCDNBase = "https://cdn.playwright.dev"
 
 // playwrightHeadlessShellBinaryName is the executable name inside a
@@ -116,10 +116,13 @@ func parseManifest(data []byte) (version, url string, err error) {
 }
 
 // downloadEngine downloads (or reuses) chrome-headless-shell in the OS user
-// cache directory and returns the path of its executable.
-func downloadEngine(ctx context.Context, cacheDirOverride string) (string, error) {
+// cache directory and returns the path of its executable. onProgress, if
+// non-nil, is invoked after every chunk written during an actual network
+// download (never on a cache hit) with bytes-so-far and the total size (0 if
+// the server omitted Content-Length).
+func downloadEngine(ctx context.Context, cacheDirOverride string, onProgress func(downloaded, total int64)) (string, error) {
 	if runtimeGOOS() == "linux" && runtimeGOARCH() == "arm64" {
-		return downloadPlaywrightHeadlessShellLinuxARM64(ctx, cacheDirOverride)
+		return downloadPlaywrightHeadlessShellLinuxARM64(ctx, cacheDirOverride, onProgress)
 	}
 	slug := platformSlug()
 	if slug == "" {
@@ -151,7 +154,7 @@ func downloadEngine(ctx context.Context, cacheDirOverride string) (string, error
 	}
 
 	zipPath := filepath.Join(os.TempDir(), "gosearch-chrome-headless-shell-"+version+".zip")
-	if err := httpDownload(ctx, zipURL, zipPath); err != nil {
+	if err := httpDownloadProgress(ctx, zipURL, zipPath, onProgress); err != nil {
 		return "", err
 	}
 	if err := unzip(zipPath, dst); err != nil {
@@ -177,7 +180,7 @@ func downloadEngine(ctx context.Context, cacheDirOverride string) (string, error
 // engineBinaryName so findEngineBinary, and everything built on top of it,
 // stays a single-source-of-truth lookup with no awareness of a second
 // download provider.
-func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOverride string) (string, error) {
+func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOverride string, onProgress func(downloaded, total int64)) (string, error) {
 	root, err := engineCacheRoot(cacheDirOverride)
 	if err != nil {
 		return "", err
@@ -195,7 +198,7 @@ func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOver
 
 	url := fmt.Sprintf("%s/builds/chromium/%s/chromium-headless-shell-linux-arm64.zip", playwrightCDNBase, playwrightHeadlessShellRevision)
 	zipPath := filepath.Join(os.TempDir(), "gosearch-chrome-headless-shell-playwright-"+playwrightHeadlessShellRevision+".zip")
-	if err := httpDownload(ctx, url, zipPath); err != nil {
+	if err := httpDownloadProgress(ctx, url, zipPath, onProgress); err != nil {
 		return "", err
 	}
 	if err := unzip(zipPath, dst); err != nil {
@@ -310,6 +313,22 @@ func findEngineBinary(root string) string {
 
 // httpDownload streams url into dstFile with a bounded read window.
 func httpDownload(ctx context.Context, url, dstFile string) error {
+	return httpDownloadProgress(ctx, url, dstFile, nil)
+}
+
+// downloadChunkSize is the read-buffer size for httpDownloadProgress's
+// manual copy loop — needed (instead of io.Copy) so onProgress can fire
+// after each chunk. 256KB matches the chunk size an already-proven
+// progress-reporting download loop elsewhere in this codebase's sibling
+// project (memo's internal/modelstore.Store.doDownload) uses.
+const downloadChunkSize = 256 * 1024
+
+// httpDownloadProgress is httpDownload with an optional progress callback,
+// invoked after every chunk written with (downloaded, total) — total is 0
+// when the response carries no Content-Length. onProgress may be nil, in
+// which case this is byte-for-byte equivalent to the old io.Copy-based
+// httpDownload (same atomic .part-then-rename contract).
+func httpDownloadProgress(ctx context.Context, url, dstFile string, onProgress func(downloaded, total int64)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -323,15 +342,45 @@ func httpDownload(ctx context.Context, url, dstFile string) error {
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("GET %s: HTTP %d", url, res.StatusCode)
 	}
+	var total int64
+	if res.ContentLength > 0 {
+		total = res.ContentLength
+	}
+
 	tmp := dstFile + ".part"
 	f, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(f, res.Body); err != nil {
-		_ = f.Close()
-		_ = os.Remove(tmp)
-		return err
+	defer func() { _ = f.Close() }()
+
+	var downloaded int64
+	buf := make([]byte, downloadChunkSize)
+	for {
+		select {
+		case <-ctx.Done():
+			_ = os.Remove(tmp)
+			return ctx.Err()
+		default:
+		}
+		n, readErr := res.Body.Read(buf)
+		if n > 0 {
+			if _, writeErr := f.Write(buf[:n]); writeErr != nil {
+				_ = os.Remove(tmp)
+				return writeErr
+			}
+			downloaded += int64(n)
+			if onProgress != nil {
+				onProgress(downloaded, total)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			_ = os.Remove(tmp)
+			return readErr
+		}
 	}
 	if err := f.Close(); err != nil {
 		return err

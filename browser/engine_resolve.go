@@ -38,6 +38,9 @@ type engineConfig struct {
 	// keepProfile marks a user-supplied profileDir as persistent (never
 	// deleted by Close).
 	keepProfile bool
+	// onProgress, set via WithProgress, is invoked during an actual network
+	// download (AllowDownload path only) with bytes-so-far and total size.
+	onProgress func(downloaded, total int64)
 }
 
 // WithHeadless controls whether the browser runs headlessly (default true,
@@ -80,6 +83,20 @@ func AllowDownload(v bool) Option {
 	return func(c *engineConfig) { c.allowDownload = v }
 }
 
+// WithProgress registers a callback invoked periodically during an actual
+// network download (the AllowDownload path only — never for discover(),
+// findCachedBinary, the embedded archive, or an explicit WithExecutable)
+// with bytes downloaded so far and the total size. total is 0 when the
+// server's response carried no Content-Length, in which case downloaded
+// still increases so callers can show an indeterminate "N MB downloaded"
+// state instead of a percentage. Called synchronously, once per read chunk,
+// from the same goroutine that called Install/New — it must not block or
+// panic; a caller that needs the value on another goroutine should hand it
+// off (e.g. update a mutex-guarded struct) rather than do slow work inline.
+func WithProgress(fn func(downloaded, total int64)) Option {
+	return func(c *engineConfig) { c.onProgress = fn }
+}
+
 // resolveExecutable returns the path of the chromium-family executable to
 // drive: an explicitly supplied path wins; then the embedded archive (when
 // this binary was built with the gosearch_embed_engine build tag); then
@@ -106,7 +123,7 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 		return p, nil
 	}
 	if cfg.allowDownload {
-		p, err := downloadEngine(ctx, cfg.cacheDir)
+		p, err := downloadEngine(ctx, cfg.cacheDir, cfg.onProgress)
 		if err != nil {
 			return "", fmt.Errorf("browser: download engine: %w", err)
 		}
