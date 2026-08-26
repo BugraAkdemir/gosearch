@@ -21,6 +21,28 @@ const cfdManifestURL = "https://googlechromelabs.github.io/chrome-for-testing/la
 // archive (with .exe on Windows appended by findEngineBinary).
 const engineBinaryName = "chrome-headless-shell"
 
+// playwrightHeadlessShellRevision pins the Microsoft Playwright build used
+// as the linux/arm64 download source (see downloadPlaywrightHeadlessShellLinuxARM64).
+// Google's chrome-for-testing service — the primary source for every other
+// platform below — has never published an official linux/arm64 build
+// (Raspberry Pi, ARM servers/VPS); Playwright separately builds and hosts
+// one. There is no runtime-queryable "latest stable" manifest for it the way
+// chrome-for-testing has (parseManifest below), so this is pinned by hand.
+// To bump: check the "chromium-headless-shell" entry's "revision" field in
+// https://github.com/microsoft/playwright/blob/main/packages/playwright-core/browsers.json
+const playwrightHeadlessShellRevision = "1241" // Chrome for Testing 152.0.7977.54, as of 2026-08-26
+
+// playwrightCDNBase is a var (not const) so tests can point it at a fake
+// server; chrome-for-testing's cfdManifestURL has no equivalent test seam
+// today because nothing exercises its download path outside integration
+// tests — this one does (see cfd_arm64_test.go).
+var playwrightCDNBase = "https://cdn.playwright.dev"
+
+// playwrightHeadlessShellBinaryName is the executable name inside a
+// Playwright chromium-headless-shell archive — "headless_shell", not
+// "chrome-headless-shell" as chrome-for-testing names it.
+const playwrightHeadlessShellBinaryName = "headless_shell"
+
 // cfdManifest models only the fields this package consumes.
 type cfdManifest struct {
 	Channels struct {
@@ -96,9 +118,12 @@ func parseManifest(data []byte) (version, url string, err error) {
 // downloadEngine downloads (or reuses) chrome-headless-shell in the OS user
 // cache directory and returns the path of its executable.
 func downloadEngine(ctx context.Context, cacheDirOverride string) (string, error) {
+	if runtimeGOOS() == "linux" && runtimeGOARCH() == "arm64" {
+		return downloadPlaywrightHeadlessShellLinuxARM64(ctx, cacheDirOverride)
+	}
 	slug := platformSlug()
 	if slug == "" {
-		return "", fmt.Errorf("unsupported platform %s/%s", runtimeGOOS(), runtimeGOARCH())
+		return "", fmt.Errorf("%w: %s/%s", ErrUnsupportedPlatform, runtimeGOOS(), runtimeGOARCH())
 	}
 	root, err := engineCacheRoot(cacheDirOverride)
 	if err != nil {
@@ -142,6 +167,72 @@ func downloadEngine(ctx context.Context, cacheDirOverride string) (string, error
 		return "", err
 	}
 	return p, nil
+}
+
+// downloadPlaywrightHeadlessShellLinuxARM64 downloads chromium-headless-shell
+// from Microsoft's Playwright CDN — the linux/arm64 substitute for
+// chrome-for-testing, which publishes no build for this platform at all (see
+// playwrightHeadlessShellRevision). The extracted binary is renamed from
+// Playwright's "headless_shell" to the package-wide canonical
+// engineBinaryName so findEngineBinary, and everything built on top of it,
+// stays a single-source-of-truth lookup with no awareness of a second
+// download provider.
+func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOverride string) (string, error) {
+	root, err := engineCacheRoot(cacheDirOverride)
+	if err != nil {
+		return "", err
+	}
+	// Prefixed distinctly from chrome-for-testing's version-string
+	// subdirectories (e.g. "152.0.7977.54") so the two sources can never
+	// collide in the same cache root.
+	dst := filepath.Join(root, "playwright-"+playwrightHeadlessShellRevision)
+	if p := findEngineBinary(dst); p != "" {
+		return p, nil
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%s/builds/chromium/%s/chromium-headless-shell-linux-arm64.zip", playwrightCDNBase, playwrightHeadlessShellRevision)
+	zipPath := filepath.Join(os.TempDir(), "gosearch-chrome-headless-shell-playwright-"+playwrightHeadlessShellRevision+".zip")
+	if err := httpDownload(ctx, url, zipPath); err != nil {
+		return "", err
+	}
+	if err := unzip(zipPath, dst); err != nil {
+		return "", err
+	}
+	_ = os.Remove(zipPath)
+
+	p := findPlaywrightHeadlessShellBinary(dst)
+	if p == "" {
+		return "", fmt.Errorf("archive extracted but no %s binary found", playwrightHeadlessShellBinaryName)
+	}
+	canonical := filepath.Join(filepath.Dir(p), engineBinaryName+exeSuffix())
+	if err := os.Rename(p, canonical); err != nil {
+		return "", fmt.Errorf("normalize playwright binary name: %w", err)
+	}
+	if err := chmodExec(canonical); err != nil {
+		return "", err
+	}
+	return canonical, nil
+}
+
+// findPlaywrightHeadlessShellBinary walks root for Playwright's
+// "headless_shell" executable name — the pre-rename counterpart of
+// findEngineBinary, used only during extraction of the arm64 archive.
+func findPlaywrightHeadlessShellBinary(root string) string {
+	var found string
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return filepath.SkipAll //nolint:nilerr // best-effort scan
+		}
+		if !d.IsDir() && d.Name() == playwrightHeadlessShellBinaryName {
+			found = path
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
 }
 
 // ensureEmbedded materializes the archive compiled into the binary (build
