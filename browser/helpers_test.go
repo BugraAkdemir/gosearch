@@ -31,7 +31,8 @@ func buildTestZip(t *testing.T, path string, files map[string][]byte) {
 	w := zip.NewWriter(f)
 	for name, body := range files {
 		hdr := &zip.FileHeader{Name: name}
-		if filepathBase(name) == "chrome-headless-shell" {
+		base := filepathBase(name)
+		if base == "chrome-headless-shell" || base == "headless_shell" {
 			hdr.SetMode(0o755)
 		} else {
 			hdr.SetMode(0o644)
