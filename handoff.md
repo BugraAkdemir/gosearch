@@ -30,6 +30,46 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 6 — live Pi verification found a real IsInstalled bug; added WithProgress
+
+Direct continuation of Session 5, same day: the user gave SSH access to the
+actual Raspberry Pi that reported the original bug, so the arm64 fix got
+real end-to-end verification for the first time (previously only unit-tested).
+
+**Found live:** install succeeded (binary really on disk) but `IsInstalled`
+kept reporting false — `resolveExecutable` never checked the download cache
+when `AllowDownload` was off, only `discover()`'s system paths. Fixed with
+a new `findCachedBinary` (recursive, no-network scan of the cache root —
+both download sources rename to the same canonical `engineBinaryName`, so
+one lookup covers both). Tagged `browser/v0.2.1`. New test:
+`TestFindCachedBinaryFindsAPriorDownloadWithoutNetwork` (`browser_test.go`).
+
+**Added:** `WithProgress(fn func(downloaded, total int64))` — `httpDownload`
+was a single `io.Copy`; replaced with a manual 256KB chunked read loop
+(`httpDownloadProgress`, `httpDownload` is now a nil-callback wrapper over
+it) so both `downloadEngine` (chrome-for-testing) and
+`downloadPlaywrightHeadlessShellLinuxARM64` can report real byte progress.
+Tagged `browser/v0.3.0` (minor — new capability). Test extended:
+`TestDownloadPlaywrightHeadlessShellLinuxARM64` now asserts `onProgress`
+actually fires and the final downloaded==total==Content-Length.
+
+**Verified live on the Pi**, not just unit tests: install progress polled
+0%→100% with real numbers (`4.2-5.0 MB/s`, exact byte counts), followed by
+`installed:true` with no re-download needed. This is the consuming side of
+memo's new `GET /api/browser/install/progress` — see memo's own handoff.md
+(devam 5) for that half.
+
+**Verification (pasted):**
+```
+$ cd browser && go build/vet/gofmt/test -race -count=1 ./...  → all clean
+$ golangci-lint run ./...  → 0 issues
+```
+
+**Next Session:** dual-module dedup plan below is still untouched — nothing
+from this session changed its scope, still starts exactly where it left off.
+
+---
+
 ## Session 5 — browser/v0.2.0: linux/arm64 Chromium download fix; dual-module dedup design decided but not yet implemented
 
 Triggered from the **memo** repo: a user self-hosting Memo on a Raspberry Pi
