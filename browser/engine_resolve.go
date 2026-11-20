@@ -65,6 +65,12 @@ type engineConfig struct {
 	// waitDelay, when positive, adds a ctx-aware settle delay after DOM/selector
 	// readiness before capturing outerHTML.
 	waitDelay time.Duration
+	// fallbackMinContent sets the minimum extracted rune count below which
+	// FetchWithFallback considers an HTTP response an unrendered JS shell and
+	// retries in the browser. Zero (when explicitly set) falls back only on
+	// completely empty content.
+	fallbackMinContent     int
+	fallbackMinContentSeen bool
 }
 
 // WithHeadless controls whether the browser runs headlessly (default true,
@@ -214,6 +220,21 @@ func WithWaitDelay(d time.Duration) Option {
 			return
 		}
 		c.waitDelay = d
+	}
+}
+
+// WithFallbackMinContent configures the minimum rune count of trimmed text
+// that FetchWithFallback accepts from a plain-HTTP gosearch.Fetch before
+// treating the page as an unrendered JS shell and falling back to the browser.
+// Default is 100 runes; pass 0 to fall back only when HTTP extraction yields
+// completely empty content (or ErrBlocked/ErrChallenge).
+func WithFallbackMinContent(chars int) Option {
+	return func(c *engineConfig) {
+		if chars < 0 {
+			chars = 0
+		}
+		c.fallbackMinContent = chars
+		c.fallbackMinContentSeen = true
 	}
 }
 

@@ -37,20 +37,21 @@ type Engine struct {
 	sem            chan struct{}
 	maxConcurrency int
 
-	profileDir     string
-	executable     string
-	userAgent      string
-	proxyRawURL    string
-	timeout        time.Duration
-	maxResults     int
-	allowedDomains []string
-	blockedDomains []string
-	waitSelector   string
-	waitDelay      time.Duration
-	runHeadless    bool
-	keepProfile    bool
-	markdown       bool
-	closeOnce      sync.Once
+	profileDir         string
+	executable         string
+	userAgent          string
+	proxyRawURL        string
+	timeout            time.Duration
+	maxResults         int
+	allowedDomains     []string
+	blockedDomains     []string
+	waitSelector       string
+	waitDelay          time.Duration
+	fallbackMinContent int
+	runHeadless        bool
+	keepProfile        bool
+	markdown           bool
+	closeOnce          sync.Once
 }
 
 // New resolves which executable to drive (explicit path > embedded archive >
@@ -91,24 +92,29 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 	if maxConc < 1 {
 		maxConc = 1
 	}
+	minContent := defaultFallbackMinContent
+	if cfg.fallbackMinContentSeen {
+		minContent = cfg.fallbackMinContent
+	}
 
 	return &Engine{
-		executable:     exe,
-		profileDir:     profile,
-		userAgent:      normalizedUserAgent(cfg.userAgent),
-		proxyRawURL:    cfg.proxyRawURL,
-		timeout:        cfg.timeout,
-		maxResults:     cfg.maxResults,
-		allowedDomains: append([]string(nil), cfg.allowedDomains...),
-		blockedDomains: append([]string(nil), cfg.blockedDomains...),
-		waitSelector:   cfg.waitSelector,
-		waitDelay:      cfg.waitDelay,
-		runHeadless:    headless,
-		keepProfile:    cfg.keepProfile,
-		markdown:       cfg.markdown,
-		maxConcurrency: maxConc,
-		sem:            make(chan struct{}, maxConc),
-		closedCh:       make(chan struct{}),
+		executable:         exe,
+		profileDir:         profile,
+		userAgent:          normalizedUserAgent(cfg.userAgent),
+		proxyRawURL:        cfg.proxyRawURL,
+		timeout:            cfg.timeout,
+		maxResults:         cfg.maxResults,
+		allowedDomains:     append([]string(nil), cfg.allowedDomains...),
+		blockedDomains:     append([]string(nil), cfg.blockedDomains...),
+		waitSelector:       cfg.waitSelector,
+		waitDelay:          cfg.waitDelay,
+		fallbackMinContent: minContent,
+		runHeadless:        headless,
+		keepProfile:        cfg.keepProfile,
+		markdown:           cfg.markdown,
+		maxConcurrency:     maxConc,
+		sem:                make(chan struct{}, maxConc),
+		closedCh:           make(chan struct{}),
 	}, nil
 }
 
