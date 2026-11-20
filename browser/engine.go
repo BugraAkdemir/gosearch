@@ -42,6 +42,7 @@ type Engine struct {
 	userAgent     string
 	runHeadless   bool
 	keepProfile   bool
+	markdown      bool
 	warmed        sync.Once
 	startOnce     sync.Once
 	startErr      error
@@ -85,6 +86,7 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 		userAgent:   normalizedUserAgent(cfg.userAgent),
 		runHeadless: headless,
 		keepProfile: cfg.keepProfile,
+		markdown:    cfg.markdown,
 	}, nil
 }
 

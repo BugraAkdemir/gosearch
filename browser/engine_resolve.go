@@ -41,6 +41,9 @@ type engineConfig struct {
 	// onProgress, set via WithProgress, is invoked during an actual network
 	// download (AllowDownload path only) with bytes-so-far and total size.
 	onProgress func(downloaded, total int64)
+	// markdown makes Engine.Fetch return GitHub-flavored Markdown instead of
+	// plain text, matching gosearch.WithMarkdown. Off by default.
+	markdown bool
 }
 
 // WithHeadless controls whether the browser runs headlessly (default true,
@@ -95,6 +98,15 @@ func AllowDownload(v bool) Option {
 // off (e.g. update a mutex-guarded struct) rather than do slow work inline.
 func WithProgress(fn func(downloaded, total int64)) Option {
 	return func(c *engineConfig) { c.onProgress = fn }
+}
+
+// WithMarkdown makes Engine.Fetch return extracted main content as
+// GitHub-flavored Markdown in Page.Content (headings, lists, code fences,
+// links, emphasis, tables) instead of plain text, mirroring
+// gosearch.WithMarkdown. Off by default so existing callers see plain text.
+// Ignored by Engine.Search.
+func WithMarkdown() Option {
+	return func(c *engineConfig) { c.markdown = true }
 }
 
 // resolveExecutable returns the path of the chromium-family executable to

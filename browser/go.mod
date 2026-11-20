@@ -3,7 +3,7 @@ module github.com/BugraAkdemir/gosearch/browser
 go 1.25.0
 
 require (
-	github.com/BugraAkdemir/gosearch v0.1.0
+	github.com/BugraAkdemir/gosearch v0.2.0
 	github.com/chromedp/chromedp v0.14.1
 )
 

@@ -54,5 +54,18 @@ func TestLiveSearchAndFetch(t *testing.T) {
 	if !strings.Contains(strings.ToLower(page.Content), "example domain") {
 		t.Errorf("content missing expected text; got %.200q", page.Content)
 	}
+
+	eMD, err := New(ctx, WithMarkdown())
+	if err != nil {
+		t.Fatalf("New(WithMarkdown): %v", err)
+	}
+	defer func() { _ = eMD.Close() }()
+	mdPage, err := eMD.Fetch(ctx, "https://example.com/")
+	if err != nil {
+		t.Fatalf("Fetch(WithMarkdown): %v", err)
+	}
+	if !strings.Contains(mdPage.Content, "# Example Domain") && !strings.Contains(strings.ToLower(mdPage.Content), "example domain") {
+		t.Errorf("markdown content missing expected text; got %.200q", mdPage.Content)
+	}
 	var _ = gosearch.ErrChallenge // keep sentinel import documented for callers
 }

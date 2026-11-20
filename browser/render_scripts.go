@@ -29,27 +29,16 @@ const searchExtractJS = `(() => {
   return JSON.stringify(out);
 })()`
 
-// fetchExtractJS extracts the readable main content of any page: prefer
-// <article>/<main>, else the text-heaviest ancestor of the largest <p>
-// cluster, else body. Returns final URL too, since redirects are common.
-const fetchExtractJS = `(() => {
-  let root = document.querySelector('article') || document.querySelector('main');
-  if (!root) {
-    let best = document.body, bestLen = 0;
-    for (const p of document.querySelectorAll('p')) {
-      const c = p.closest('div, section') || document.body;
-      const len = (c.innerText || '').length;
-      if (len > bestLen) { best = c; bestLen = len; }
-    }
-    root = best || document.body;
-  }
-  const strip = (root.querySelectorAll('script, style, nav, header, footer, aside, form, noscript'));
-  const removed = [];
-  for (const el of strip) { removed.push([el, el.nextSibling]); el.remove(); }
-  const text = (root.innerText || '').replace(/\n{3,}/g, '\n\n').slice(0, 20000);
-  for (const [el, next] of removed.reverse()) { el.parentNode && el.parentNode.insertBefore(el, next); }
-  return JSON.stringify({ title: document.title || '', url: location.href, content: text });
-})()`
+// fetchHTMLJS captures the post-JavaScript rendered document HTML and final
+// URL in a single CDP round-trip so Engine.Fetch can feed the exact rendered
+// DOM to core's internal/readability extractor instead of maintaining a
+// separate JS-side readability heuristic. The JS-side slice bounds CDP wire
+// transfer on huge infinite-scroll pages; Go enforces the exact UTF-8 and
+// tag-safe byte cap (maxHTMLBytes) before parsing.
+const fetchHTMLJS = `(() => JSON.stringify({
+  url: location.href || '',
+  html: (document.documentElement ? document.documentElement.outerHTML : '').slice(0, 8388608)
+}))()`
 
 // pageStateJS reports where the tab currently is: final URL and title.
 // Used for consent detection and for enriching failure diagnostics.
