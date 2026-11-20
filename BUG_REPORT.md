@@ -5,10 +5,11 @@
 > and `AGENTS.md`'s Known Pitfalls section. This file's only job is: *what's
 > still broken, right now, today.*
 >
-> **Last updated:** 2026-08-24 — v0.2.0 release point: Bing engine + quality
-> package (canonical dedup, WithMarkdown/WithDates, domain policy) shipped.
-> One real bug found by live probing (root noise-marker classes erasing
-> pages) fixed same day — see AGENTS.md Security. No open bugs.
+> **Last updated:** 2026-11-20 — `browser/` hardening & feature parity shipped
+> (unified `internal/readability` extraction + `WithMarkdown`, concurrency/ctx
+> cancel/crash recovery, SPA waits, option parity, hybrid fallback, cache
+> helpers). Three browser lifecycle bugs caught during upgrade-compatibility
+> testing were fixed same day — see `AGENTS.md` Known Pitfalls. No open bugs.
 
 ---
 
@@ -35,5 +36,4 @@
 
 ## Open Bugs
 
-_None. Phase 1 is still being implemented; see `plan.md` for what's not built
-yet (that's planned work, not bugs)._
+_None. All Phases 1–5 and browser hardening items are shipped with 0 open bugs._

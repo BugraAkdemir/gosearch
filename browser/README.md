@@ -59,17 +59,64 @@ func main() {
 }
 ```
 
-One `Engine` = one long-lived browser process with one reused tab. Keep it
-alive for the lifetime of your program; steady-state memory stays at roughly
-one page's worth (~100–250 MB idle + page), not a fresh browser per request.
-Images are disabled and the GPU process is off by default to keep consumption
-down.
+One `Engine` = one long-lived browser process. By default, calls serialize on
+a single reused tab so steady-state memory stays at roughly one page's worth
+(~100–250 MB idle + page), not a fresh browser per request; pass
+`browser.WithMaxConcurrency(n)` to run up to `n` isolated tabs concurrently
+inside the same process. `Engine` is safe for concurrent use, honors caller
+`ctx` cancellation promptly, and transparently restarts Chromium (one-shot
+recovery) if the underlying browser process exits unexpectedly. Images are
+disabled and the GPU process is off by default to keep consumption down.
 
-Deployment helpers: `browser.Install(ctx, opts...)` performs the same
-discovery-or-download without building an Engine — call it in a Dockerfile
-`RUN` step or setup script so the one-time download never lands on a live
-user request. `browser.WithCacheDir(path)` points storage somewhere writable
-when the default user-cache location is read-only (locked-down containers).
+`Engine.Fetch` delegates extraction to the core module's `internal/readability`
+package (capped at 8 MiB on a UTF-8/tag-safe boundary), so plain-text and
+`browser.WithMarkdown()` outputs match `gosearch.Fetch` identically.
+
+### Hybrid HTTP → Browser Fallback
+
+When most target pages are static and only a few require JavaScript or hit
+anti-bot walls, use `FetchWithFallback` / `SearchWithFallback`:
+
+```go
+// Tries fast plain-HTTP gosearch.Fetch first (never launches Chromium on
+// rich static pages); falls back to e.Fetch on ErrBlocked/ErrChallenge or
+// thin/empty JS shells (< 100 runes by default; tune with WithFallbackMinContent).
+page, err := e.FetchWithFallback(ctx, "https://example.com/spa")
+
+// Tries plain-HTTP gosearch.Search first; falls back to e.Search ONLY on
+// ErrBlocked/ErrChallenge (never on ErrNoResults).
+results, err := e.SearchWithFallback(ctx, "golang", gosearch.DuckDuckGo)
+```
+
+### Options Reference
+
+| Option | Purpose |
+|---|---|
+| `WithMarkdown()` | Return GitHub-flavored Markdown from `Fetch` / `FetchWithFallback` |
+| `WithTimeout(d)` | Override per-call timeout (defaults: 30s Search, 45s Fetch) |
+| `WithProxy(rawURL)` | Route Chromium traffic via `--proxy-server` (`http`/`https`/`socks5`) |
+| `WithMaxResults(n)` | Cap `Search` results (default 30) |
+| `WithAllowedDomains(...)` / `WithBlockedDomains(...)` | Post-search suffix-host domain filter (deny first, then allow) |
+| `WithMaxConcurrency(n)` | Concurrent tabs per `Engine` (default 1 serialized tab) |
+| `WithWaitSelector(css)` | Wait for a CSS selector in `Fetch` for async SPAs (React/Vue/Next) |
+| `WithWaitDelay(d)` | Context-aware settle delay in `Fetch` after DOM/selector readiness |
+| `WithFallbackMinContent(n)` | Rune threshold for `FetchWithFallback` JS-shell detection (default 100; `0` = empty only) |
+| `WithHeadless(bool)` | Run headless (default `true`) or visible window (`false`) |
+| `WithProfileDir(path)` | Persistent Chromium profile directory (kept on `Close`) |
+| `WithUserAgent(ua)` | Override declared desktop Chrome User-Agent |
+| `WithExecutable(path)` | Force a specific Chromium-family binary |
+| `AllowDownload(bool)` | Opt-in one-time download (chrome-for-testing, or Playwright CDN on `linux/arm64`) |
+| `WithProgress(fn)` | Byte-level progress callback during network download |
+| `WithCacheDir(path)` | Override cache root for downloaded/embedded engines |
+
+Deployment & cache helpers:
+- `browser.Install(ctx, opts...)` performs discovery-or-download without
+  constructing an `Engine` (ideal for Dockerfile `RUN` steps or setup scripts).
+- `browser.CleanCache(opts...)` / `browser.Uninstall(opts...)` safely remove
+  previously downloaded or extracted engines from the gosearch cache (never
+  touching system-installed browsers).
+- `browser.StableEngineAsset(ctx)` returns the download version & URL for the
+  current platform (including the pinned Playwright CDN asset on `linux/arm64`).
 
 
 ### When Google serves its `/sorry` CAPTCHA

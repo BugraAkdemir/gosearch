@@ -159,6 +159,10 @@ effectively permanent on the Go module proxy once fetched.
   noise removal (`TestExtractSurvivesNoiseMarkerClassesOnRoot` pins it).
   Lesson: the synthetic article fixture could never catch this — only a real
   page could; keep live probes in the loop after extractor changes.
+- **FOUND & FIXED 2026-11-20 (compat scenario probe, `browser/`):**
+  1. `browser.(*Engine).pageDiagnostics` called `context.WithTimeout(e.ctx, 3*time.Second)` without checking for `nil`; when browser startup failed (e.g. invalid `WithExecutable`), `e.ctx` remained `nil` and `Fetch`/`Search` panicked (`cannot create context from nil parent`). → fixed 2026-11-20 (`c40a490`): `pageDiagnostics` now takes the active `tabCtx` with a nil/canceled guard and bounded timeout (`db3458d`).
+  2. `browser.(*Engine).Close` canceled contexts without waiting for graceful Chromium exit (`chromedp.Cancel`), causing profile cleanup to race with Chromium still flushing files (`directory not empty`). → fixed 2026-11-20 (`c40a490`): `Close` now performs synchronous `chromedp.Cancel` shutdown before removing throwaway profiles.
+  3. `browser.(*Engine).run` shared a single unlocked tab across concurrent calls (4/4 parallel `Fetch` calls failed with `net::ERR_ABORTED`), ignored caller `ctx` cancellation, and never recovered after an unexpected Chromium exit. → fixed 2026-11-20 (`c40a490`): bounded semaphore (`WithMaxConcurrency`), `context.AfterFunc` cancellation propagation, and one-shot crash recovery.
 - Block-detection markers (header names, redirect substrings, marker CSS
   classes) live in `internal/httpclient`. Treat them as untrusted external
   input — never `eval`/execute anything from a fetched page; we only ever
@@ -230,9 +234,12 @@ must be addressed before claiming done.
 ## Known Open Work
 
 Open bugs and technical debt are tracked in **`BUG_REPORT.md`** — don't
-duplicate that list here. As of 2026-08-24: 0 open items; Phases 1–4 are
-shipped, Phase 5 browser module built, plus a post-v0.1 quality package
-(canonical URL dedup, opt-in `WithMarkdown`/`WithDates`, domain policy).
+duplicate that list here. As of 2026-11-20: 0 open items; Phases 1–4 are
+shipped, Phase 5 browser module built and hardened (`browser.Fetch` unified
+on `internal/readability` with `WithMarkdown` + 8 MiB cap, concurrency safety
++ `WithMaxConcurrency`, `ctx` cancellation, crash recovery, SPA wait options,
+core option parity, HTTP→browser hybrid fallback, and `CleanCache`/`Uninstall`
++ `linux/arm64` `StableEngineAsset`), plus the post-v0.1 quality package.
 Still open from the exit criteria: real success-page
 captures from a trusted network for Google (`testdata/google/
 real_success.html`) and Yandex (`testdata/yandex/real_success.html`) — and

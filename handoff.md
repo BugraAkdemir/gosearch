@@ -30,6 +30,108 @@ should never have to reconstruct "what was I doing" from git log alone.
 
 ---
 
+## Session 7 (2026-11-20) — browser/ hardening, Option A readability unification, core option parity, hybrid fallback, and cache helpers
+
+Implemented the Session 5 Option A dual-module unification plus a full
+`browser/` hardening & feature-parity pass, verified before and after against
+a standalone non-git upgrade-compatibility scenario project running real
+Chromium (`/usr/bin/chromium`) against local deterministic `httptest` servers.
+
+**What was done (6 commits on `main`, not pushed / not tagged):**
+- `9243c33` **Readability unification (Option A):** replaced `fetchExtractJS`
+  in `browser/fetch.go` with capturing post-JS `outerHTML` + `location.href`
+  and feeding it through core's `internal/readability.Extract` /
+  `ExtractMarkdown`. Added `browser.WithMarkdown()` and UTF-8/tag-safe 8 MiB
+  cap (`truncateHTMLSafe`). Bumped `browser/go.mod` core require from `v0.1.0`
+  to `v0.2.0` so external consumers resolve `ExtractMarkdown` and
+  `NormalizeURL` cleanly without needing `replace`. Core `go.mod` stays
+  zero-extra-dep.
+- `c40a490` & `db3458d` **Concurrency, ctx cancel, crash recovery, shutdown &
+  panic fixes:**
+  - Added bounded concurrency semaphore (`WithMaxConcurrency`, default `1`
+    serialized shared tab; `> 1` spawns isolated tabs via
+    `chromedp.NewContext(rootTabCtx)` on the same browser process).
+  - Propagated caller `ctx` cancellation via `context.AfterFunc` and preserved
+    `context.Canceled` / `ErrEngineClosed` instead of misclassifying as
+    `ErrChallenge`.
+  - Replaced one-shot `startOnce` with mutex-guarded lifecycle state +
+    automatic one-shot crash recovery when Chromium dies mid-run or while idle.
+  - Fixed two live bugs caught by the baseline upgrade-compatibility harness:
+    (1) nil-context panic in `pageDiagnostics` when `start()` failed, and
+    (2) async shutdown race in `Close()` (`chromedp.Cancel` now waits for
+    Chromium to flush & exit before removing throwaway profiles).
+  - Bounded `pageDiagnostics` timeout to `min(500ms, opTimeout/2)` (100ms
+    floor) so stalled navigations do not add +3s past a tight `WithTimeout`.
+- `2e844ca` **SPA waits & core option parity:** added `WithWaitSelector`,
+  `WithWaitDelay` (ctx-aware), `WithTimeout`, `WithProxy` (validated in `New`,
+  wired to `--proxy-server`), `WithMaxResults`, `WithAllowedDomains`,
+  `WithBlockedDomains`, and `internal/provider.NormalizeURL` canonical dedup
+  in `browser/search.go`.
+- `9013435` **Hybrid HTTP→Browser fallback (`browser/hybrid.go`):** added
+  `FetchWithFallback`, `SearchWithFallback`, and `WithFallbackMinContent`
+  (default 100 runes; `0` = empty-only). Static pages stay pure HTTP and never
+  launch Chromium; JS-empty shells and `ErrBlocked`/`ErrChallenge` fall back
+  automatically; `SearchWithFallback` preserves the rule that `ErrNoResults`
+  never triggers fallback.
+- `74071a3` **Cache management & archive hardening (`browser/cfd.go`,
+  `browser/extract.go`):** taught `StableEngineAsset` about the pinned
+  `linux/arm64` Playwright CDN source (+ `ErrUnsupportedPlatform` on
+  unsupported combos), added `CleanCache` / `Uninstall` with path-safety
+  guards, made `findCachedBinary` read-only, switched download archives to
+  `os.CreateTemp` inside cache root, and added a 1 GiB `maxUnzipBytes` cap
+  against zip bombs.
+- Docs updated: `browser/README.md`, `AGENTS.md`, `BUG_REPORT.md`, `handoff.md`.
+
+**Verification (pasted):**
+```
+=== ROOT MODULE ===
+gofmt-root: ''
+ok  	github.com/BugraAkdemir/gosearch	1.040s
+ok  	github.com/BugraAkdemir/gosearch/internal/e2e	1.069s
+ok  	github.com/BugraAkdemir/gosearch/internal/httpclient	1.518s
+ok  	github.com/BugraAkdemir/gosearch/internal/provider	1.024s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/bing	1.070s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/duckduckgo	1.073s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/google	1.059s
+ok  	github.com/BugraAkdemir/gosearch/internal/providers/yandex	1.049s
+ok  	github.com/BugraAkdemir/gosearch/internal/readability	1.053s
+=== BROWSER MODULE ===
+gofmt-browser: ''
+ok  	github.com/BugraAkdemir/gosearch/browser	1.069s
+```
+Plus standalone non-git external consumer suite (`compatscenario`, real Chromium,
+`STRICT_PROBES=1 go test -race -v -count=1 ./...`):
+```
+PASS: TestV030APISignatureContract (0.00s)
+PASS: TestCoreFetchAndOptionsBaseline (0.00s)
+PASS: TestBrowserBaselineRealChromiumE2E (0.40s)
+PASS: TestBrowserExplicitInvalidExecutableErrors (0.00s)
+PASS: TestNewFeatureMarkdownRealChromium (0.33s)
+PASS: TestNewFeatureSPAWaitSelectorAndDelay (1.67s)
+PASS: TestNewFeatureMaxConcurrencyMultiTab (1.87s)
+PASS: TestNewFeatureWithTimeoutAndWithProxy (1.44s)
+PASS: TestNewFeatureHybridFetchWithFallbackRealChromium (0.32s)
+PASS: TestNewFeatureCleanCacheAndUninstall (0.00s)
+PASS: TestNewFeatureSearchOptionsCompileAndWire (0.00s)
+PASS: TestProbeConcurrentFetchSafety (1.11s)      # was 4/4 net::ERR_ABORTED
+PASS: TestProbeContextCancellation (0.63s)        # 300ms cancel (was 4.032s)
+PASS: TestProbeCrashRecovery (0.97s)              # survived SIGKILL (was dead)
+PASS: TestProbeAsyncSPABaseline (0.35s)
+ok  	compatscenario	10.107s
+```
+
+**Next Session:**
+- Commits are local on `main` (not pushed, no tag cut — per hard rule, only
+  tag `browser/v0.4.0` when the user explicitly requests a release). Note that
+  `golangci-lint` is not installed locally; CI will run `golangci-lint v2.13.1`
+  once pushed.
+- Next optional core-side package discussed earlier (not started): reusable
+  `gosearch.Client` (persistent cookie jar/rate-limiter/pool across calls),
+  `Fetch` Content-Type handling & absolute Markdown links, Cloudflare/Bing
+  block markers + updated core UA, and `removeNoise` token-boundary matching.
+
+---
+
 ## Session 6 — live Pi verification found a real IsInstalled bug; added WithProgress
 
 Direct continuation of Session 5, same day: the user gave SSH access to the
