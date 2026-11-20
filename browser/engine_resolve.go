@@ -300,12 +300,9 @@ func resolveExecutable(ctx context.Context, cfg *engineConfig) (string, error) {
 // (chrome-for-testing OR the linux/arm64 Playwright fallback — both land
 // under engineCacheRoot and both end up named engineBinaryName after
 // downloadEngine's rename step) already sits in the cache, without making
-// any network call. A no-op MkdirAll (engineCacheRoot's side effect) is the
-// only filesystem write; a missing/unreadable cache root is treated as
-// "nothing cached" rather than an error, matching discover()'s best-effort
-// contract.
+// any network call or creating directories on disk.
 func findCachedBinary(cacheDirOverride string) string {
-	root, err := engineCacheRoot(cacheDirOverride)
+	root, err := resolveCacheRootPath(cacheDirOverride)
 	if err != nil {
 		return ""
 	}

@@ -10,10 +10,16 @@ import (
 // osStat is indirected for tests.
 var osStat = os.Stat
 
+// maxUnzipBytes caps total uncompressed bytes written by unzip so a malformed
+// or hostile archive (zip bomb) cannot exhaust disk space. A real
+// chrome-headless-shell archive extracts to ~200-350 MiB.
+var maxUnzipBytes int64 = 1 << 30 // 1 GiB
+
 // unzip extracts the zip archive at src into dst, creating parent
 // directories. File modes are preserved so executables stay executable; zip
 // entries carry Unix mode in the upper bits of ExternalAttrs. It refuses to
-// follow entries escaping dst ("zip slip").
+// follow entries escaping dst ("zip slip") and enforces maxUnzipBytes total
+// extracted size.
 func unzip(src, dst string) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
@@ -21,6 +27,7 @@ func unzip(src, dst string) error {
 	}
 	defer func() { _ = r.Close() }()
 
+	var totalWritten int64
 	for _, f := range r.File {
 		name, ok := safeJoin(dst, f.Name)
 		if !ok {
@@ -48,10 +55,21 @@ func unzip(src, dst string) error {
 			_ = out.Close()
 			return err
 		}
-		if _, err := io.Copy(out, in); err != nil {
+		remaining := maxUnzipBytes - totalWritten
+		if remaining < 0 {
+			remaining = 0
+		}
+		n, copyErr := io.Copy(out, io.LimitReader(in, remaining+1))
+		totalWritten += n
+		if copyErr != nil {
 			_ = in.Close()
 			_ = out.Close()
-			return err
+			return copyErr
+		}
+		if totalWritten > maxUnzipBytes {
+			_ = in.Close()
+			_ = out.Close()
+			return fmt.Errorf("archive exceeds maximum uncompressed size (%d bytes)", maxUnzipBytes)
 		}
 		if err := in.Close(); err != nil {
 			_ = out.Close()

@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -62,14 +63,128 @@ type cfdManifest struct {
 // (linux64, mac-arm64, mac-x64, win64), or "" when unsupported.
 func CurrentPlatform() string { return platformSlug() }
 
-// StableEngineAsset returns the current stable chrome-headless-shell version
-// and its download URL for this platform.
+// StableEngineAsset returns the current stable headless-shell version string
+// and its download URL for this host platform.
+//
+// For linux/amd64, darwin/arm64, darwin/amd64, and windows/amd64 it queries
+// Google's chrome-for-testing manifest. For linux/arm64 (where chrome-for-testing
+// publishes no build) it returns the pinned Microsoft Playwright CDN asset.
+// Truly unsupported platforms return an error wrapping ErrUnsupportedPlatform.
 func StableEngineAsset(ctx context.Context) (version, url string, err error) {
+	if runtimeGOOS() == "linux" && runtimeGOARCH() == "arm64" {
+		return playwrightHeadlessShellVersion(), playwrightHeadlessShellURL(), nil
+	}
+	if platformSlug() == "" {
+		return "", "", fmt.Errorf("%w: %s/%s", ErrUnsupportedPlatform, runtimeGOOS(), runtimeGOARCH())
+	}
 	data, err := fetchManifest(ctx)
 	if err != nil {
 		return "", "", err
 	}
 	return parseManifest(data)
+}
+
+func playwrightHeadlessShellVersion() string {
+	return "playwright-" + playwrightHeadlessShellRevision
+}
+
+func playwrightHeadlessShellURL() string {
+	return fmt.Sprintf("%s/builds/chromium/%s/chromium-headless-shell-linux-arm64.zip",
+		playwrightCDNBase, playwrightHeadlessShellRevision)
+}
+
+// CleanCache removes all browser engines previously downloaded or extracted
+// into the gosearch browser cache directory (honoring WithCacheDir if passed).
+// It never touches system-installed Chrome/Chromium/Edge binaries.
+//
+// Calling CleanCache when the cache directory does not exist is a safe no-op
+// (returning nil without creating the directory). Dangerous paths (filesystem
+// roots, HOME, the parent cache root, or TempDir) are rejected.
+func CleanCache(opts ...Option) error {
+	cfg := &engineConfig{}
+	for _, o := range opts {
+		if o != nil {
+			o(cfg)
+		}
+	}
+	root, err := resolveCacheRootPath(cfg.cacheDir)
+	if err != nil {
+		return fmt.Errorf("browser: clean cache: %w", err)
+	}
+	if !isSafeCleanTarget(root) {
+		return fmt.Errorf("browser: clean cache: refusing to clean unsafe path %q", root)
+	}
+	info, err := os.Stat(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("browser: clean cache: %w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("browser: clean cache: %q is not a directory", root)
+	}
+
+	// Default cache directory (<UserCacheDir>/gosearch/browser) is owned
+	// exclusively by gosearch and can be removed wholesale. When the caller
+	// supplied a custom WithCacheDir (e.g. a mounted container volume), clear
+	// its entries while preserving the directory itself.
+	if cfg.cacheDir == "" {
+		if err := os.RemoveAll(root); err != nil {
+			return fmt.Errorf("browser: clean cache: %w", err)
+		}
+		return nil
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return fmt.Errorf("browser: clean cache: %w", err)
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+			return fmt.Errorf("browser: clean cache: %w", err)
+		}
+	}
+	return nil
+}
+
+// Uninstall removes any browser engine previously installed by Install or
+// AllowDownload from the local gosearch cache (equivalent to CleanCache). It
+// never modifies or removes system-installed browsers.
+func Uninstall(opts ...Option) error {
+	return CleanCache(opts...)
+}
+
+// isSafeCleanTarget guards CleanCache against deleting broad system or user
+// directories if a caller misconfigures WithCacheDir.
+func isSafeCleanTarget(dir string) bool {
+	if strings.TrimSpace(dir) == "" {
+		return false
+	}
+	clean := filepath.Clean(dir)
+	if clean == "." || clean == ".." || clean == string(filepath.Separator) {
+		return false
+	}
+	// Reject filesystem roots on all platforms (e.g. "/" or "C:\").
+	if filepath.Dir(clean) == clean {
+		return false
+	}
+	abs, err := filepath.Abs(clean)
+	if err != nil {
+		return false
+	}
+	forbidden := []string{filepath.Clean(os.TempDir())}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		forbidden = append(forbidden, filepath.Clean(home))
+	}
+	if cache, err := os.UserCacheDir(); err == nil && cache != "" {
+		forbidden = append(forbidden, filepath.Clean(cache))
+	}
+	for _, f := range forbidden {
+		if fAbs, err := filepath.Abs(f); err == nil && abs == fAbs {
+			return false
+		}
+	}
+	return true
 }
 
 // DownloadFile streams url into dstFile atomically (.part then rename).
@@ -104,8 +219,11 @@ func parseManifest(data []byte) (version, url string, err error) {
 	}
 	version = m.Channels.Stable.Version
 	slug := platformSlug()
-	if version == "" || slug == "" {
-		return "", "", fmt.Errorf("manifest missing stable version or unsupported platform %s/%s", runtimeGOOS(), runtimeGOARCH())
+	if slug == "" {
+		return "", "", fmt.Errorf("%w: %s/%s", ErrUnsupportedPlatform, runtimeGOOS(), runtimeGOARCH())
+	}
+	if version == "" {
+		return "", "", fmt.Errorf("manifest missing stable version")
 	}
 	for _, d := range m.Channels.Stable.Downloads.HeadlessShell {
 		if d.Platform == slug {
@@ -153,14 +271,17 @@ func downloadEngine(ctx context.Context, cacheDirOverride string, onProgress fun
 		return "", err
 	}
 
-	zipPath := filepath.Join(os.TempDir(), "gosearch-chrome-headless-shell-"+version+".zip")
+	zipPath, cleanupZip, err := tempDownloadPath(root, "gosearch-cfd-*.zip")
+	if err != nil {
+		return "", err
+	}
+	defer cleanupZip()
 	if err := httpDownloadProgress(ctx, zipURL, zipPath, onProgress); err != nil {
 		return "", err
 	}
 	if err := unzip(zipPath, dst); err != nil {
 		return "", err
 	}
-	_ = os.Remove(zipPath)
 
 	p := findEngineBinary(dst)
 	if p == "" {
@@ -188,7 +309,7 @@ func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOver
 	// Prefixed distinctly from chrome-for-testing's version-string
 	// subdirectories (e.g. "152.0.7977.54") so the two sources can never
 	// collide in the same cache root.
-	dst := filepath.Join(root, "playwright-"+playwrightHeadlessShellRevision)
+	dst := filepath.Join(root, playwrightHeadlessShellVersion())
 	if p := findEngineBinary(dst); p != "" {
 		return p, nil
 	}
@@ -196,15 +317,18 @@ func downloadPlaywrightHeadlessShellLinuxARM64(ctx context.Context, cacheDirOver
 		return "", err
 	}
 
-	url := fmt.Sprintf("%s/builds/chromium/%s/chromium-headless-shell-linux-arm64.zip", playwrightCDNBase, playwrightHeadlessShellRevision)
-	zipPath := filepath.Join(os.TempDir(), "gosearch-chrome-headless-shell-playwright-"+playwrightHeadlessShellRevision+".zip")
+	url := playwrightHeadlessShellURL()
+	zipPath, cleanupZip, err := tempDownloadPath(root, "gosearch-playwright-*.zip")
+	if err != nil {
+		return "", err
+	}
+	defer cleanupZip()
 	if err := httpDownloadProgress(ctx, url, zipPath, onProgress); err != nil {
 		return "", err
 	}
 	if err := unzip(zipPath, dst); err != nil {
 		return "", err
 	}
-	_ = os.Remove(zipPath)
 
 	p := findPlaywrightHeadlessShellBinary(dst)
 	if p == "" {
@@ -254,14 +378,29 @@ func ensureEmbedded(ctx context.Context, cacheDirOverride string) (string, error
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return "", err
 	}
-	zipPath := filepath.Join(dst, "engine.zip")
-	if err := os.WriteFile(zipPath, embeddedEngineZip, 0o644); err != nil {
+	zipPath, cleanupZip, err := tempDownloadPath(dst, "embedded-*.zip")
+	if err != nil {
+		return "", err
+	}
+	defer cleanupZip()
+	if err := os.WriteFile(zipPath, embeddedEngineZip, 0o600); err != nil {
 		return "", err
 	}
 	if err := unzip(zipPath, dst); err != nil {
 		return "", err
 	}
 	p := findEngineBinary(dst)
+	if p == "" {
+		// Support embedded Playwright linux/arm64 archives whose binary is
+		// named "headless_shell" before canonical rename.
+		if pw := findPlaywrightHeadlessShellBinary(dst); pw != "" {
+			canonical := filepath.Join(filepath.Dir(pw), engineBinaryName+exeSuffix())
+			if err := os.Rename(pw, canonical); err != nil {
+				return "", fmt.Errorf("normalize embedded playwright binary name: %w", err)
+			}
+			p = canonical
+		}
+	}
 	if p == "" {
 		return "", fmt.Errorf("embedded archive contains no %s binary", engineBinaryName)
 	}
@@ -271,21 +410,44 @@ func ensureEmbedded(ctx context.Context, cacheDirOverride string) (string, error
 	return p, nil
 }
 
-// engineCacheRoot returns the engine storage directory — an explicit
-// override when set (WithCacheDir), else <user-cache>/gosearch/browser —
-// creating it if needed.
-func engineCacheRoot(override string) (string, error) {
+// tempDownloadPath allocates a unique temporary file path inside dir (never in
+// shared /tmp with predictable names) and returns a cleanup function that
+// removes both the archive and any leftover .part file.
+func tempDownloadPath(dir, pattern string) (path string, cleanup func(), err error) {
+	f, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", nil, err
+	}
+	path = f.Name()
+	_ = f.Close()
+	cleanup = func() {
+		_ = os.Remove(path)
+		_ = os.Remove(path + ".part")
+	}
+	return path, cleanup, nil
+}
+
+// resolveCacheRootPath computes the browser cache directory path without
+// creating it on disk.
+func resolveCacheRootPath(override string) (string, error) {
 	if override != "" {
-		if err := os.MkdirAll(override, 0o755); err != nil {
-			return "", err
-		}
 		return override, nil
 	}
 	base, err := os.UserCacheDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve user cache dir: %w", err)
 	}
-	dir := filepath.Join(base, "gosearch", "browser")
+	return filepath.Join(base, "gosearch", "browser"), nil
+}
+
+// engineCacheRoot returns the engine storage directory — an explicit
+// override when set (WithCacheDir), else <user-cache>/gosearch/browser —
+// creating it if needed.
+func engineCacheRoot(override string) (string, error) {
+	dir, err := resolveCacheRootPath(override)
+	if err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
