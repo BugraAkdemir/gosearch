@@ -120,11 +120,25 @@ PASS: TestProbeAsyncSPABaseline (0.35s)
 ok  	compatscenario	10.107s
 ```
 
+**Release & CI status (updated same session):**
+- `9d01ca4` updated all docs (`README.md`, `docs/API.md`, `docs/ARCHITECTURE.md`,
+  `docs/RECIPES.md`, `browser/README.md`) and pushed `main`.
+- First CI run (`44744549048`) caught 1 `golangci-lint` (`revive`) issue:
+  missing package doc comment in `browser/engine.go` (dropped during the
+  lifecycle rewrite). Restored in `da2d137`, re-pushed, and CI run
+  `44744804271` passed 100% green (`test` 23s, `browser` 25s — 0 lint issues).
+- Annotated tag **`browser/v0.4.0`** cut on `da2d137`, pushed to `origin`,
+  and GitHub Release published
+  (`https://github.com/BugraAkdemir/gosearch/releases/tag/browser/v0.4.0`).
+- Verified live from `proxy.golang.org` (`Hash: da2d137ec19fe552a42d1f0a97ffbb4011114fd4`)
+  AND verified in a clean external module (`go get github.com/BugraAkdemir/gosearch/browser@v0.4.0`
+  with NO `replace` directive — cross-module `internal/readability` + `internal/provider`
+  resolved cleanly against `gosearch v0.2.0` and all real-Chromium baseline tests
+  passed under `-race`).
+
 **Next Session:**
-- Commits are local on `main` (not pushed, no tag cut — per hard rule, only
-  tag `browser/v0.4.0` when the user explicitly requests a release). Note that
-  `golangci-lint` is not installed locally; CI will run `golangci-lint v2.13.1`
-  once pushed.
+- Everything from Session 7 is pushed, CI-green, tagged (`browser/v0.4.0`),
+  and verified on the Go module proxy. Root module remains `v0.2.0` (untouched).
 - Next optional core-side package discussed earlier (not started): reusable
   `gosearch.Client` (persistent cookie jar/rate-limiter/pool across calls),
   `Fetch` Content-Type handling & absolute Markdown links, Cloudflare/Bing
