@@ -37,13 +37,20 @@ type Engine struct {
 	sem            chan struct{}
 	maxConcurrency int
 
-	profileDir  string
-	executable  string
-	userAgent   string
-	runHeadless bool
-	keepProfile bool
-	markdown    bool
-	closeOnce   sync.Once
+	profileDir     string
+	executable     string
+	userAgent      string
+	proxyRawURL    string
+	timeout        time.Duration
+	maxResults     int
+	allowedDomains []string
+	blockedDomains []string
+	waitSelector   string
+	waitDelay      time.Duration
+	runHeadless    bool
+	keepProfile    bool
+	markdown       bool
+	closeOnce      sync.Once
 }
 
 // New resolves which executable to drive (explicit path > embedded archive >
@@ -56,6 +63,9 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 		if o != nil {
 			o(cfg)
 		}
+	}
+	if err := validateProxyURL(cfg.proxyRawURL); err != nil {
+		return nil, err
 	}
 	exe, err := resolveExecutable(ctx, cfg)
 	if err != nil {
@@ -86,6 +96,13 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 		executable:     exe,
 		profileDir:     profile,
 		userAgent:      normalizedUserAgent(cfg.userAgent),
+		proxyRawURL:    cfg.proxyRawURL,
+		timeout:        cfg.timeout,
+		maxResults:     cfg.maxResults,
+		allowedDomains: append([]string(nil), cfg.allowedDomains...),
+		blockedDomains: append([]string(nil), cfg.blockedDomains...),
+		waitSelector:   cfg.waitSelector,
+		waitDelay:      cfg.waitDelay,
 		runHeadless:    headless,
 		keepProfile:    cfg.keepProfile,
 		markdown:       cfg.markdown,
@@ -98,6 +115,15 @@ func New(ctx context.Context, opts ...Option) (*Engine, error) {
 // Executable reports the resolved chromium-family binary path. Valid before
 // first use because resolution happens in New.
 func (e *Engine) Executable() string { return e.executable }
+
+// effectiveTimeout returns the Engine's configured WithTimeout when set, or
+// defaultTimeout otherwise.
+func (e *Engine) effectiveTimeout(defaultTimeout time.Duration) time.Duration {
+	if e.timeout > 0 {
+		return e.timeout
+	}
+	return defaultTimeout
+}
 
 // isClosed reports whether Close has been called.
 func (e *Engine) isClosed() bool {
@@ -156,7 +182,7 @@ func (e *Engine) ensureStarted(ctx context.Context) (allocCtx, rootTabCtx contex
 
 	lifetime, stopLifetime := context.WithCancel(context.Background())
 	newAlloc, stopAllocator := chromedp.NewExecAllocator(lifetime,
-		allocatorFlags(e.profileDir, e.executable, e.userAgent, e.runHeadless)...)
+		allocatorFlags(e.profileDir, e.executable, e.userAgent, e.proxyRawURL, e.runHeadless)...)
 	newTab, stopTab := chromedp.NewContext(newAlloc)
 
 	if err := chromedp.Run(newTab); err != nil {

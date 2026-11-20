@@ -3,7 +3,9 @@ package browser
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/chromedp/chromedp"
 )
@@ -47,6 +49,22 @@ type engineConfig struct {
 	// maxConcurrency bounds how many Search/Fetch calls may run simultaneously
 	// on one Engine. Values <= 1 serialize on a single shared tab (default).
 	maxConcurrency int
+	// timeout overrides the default per-operation timeout (30s Search / 45s
+	// Fetch) when positive.
+	timeout time.Duration
+	// proxyRawURL routes Chromium traffic through --proxy-server when set.
+	proxyRawURL string
+	// maxResults caps Search results; <= 0 uses the default (30).
+	maxResults int
+	// allowedDomains/blockedDomains mirror gosearch's post-search domain policy.
+	allowedDomains []string
+	blockedDomains []string
+	// waitSelector, when non-empty, makes Fetch wait for this CSS selector to
+	// appear in the DOM after body is ready (useful for async SPAs).
+	waitSelector string
+	// waitDelay, when positive, adds a ctx-aware settle delay after DOM/selector
+	// readiness before capturing outerHTML.
+	waitDelay time.Duration
 }
 
 // WithHeadless controls whether the browser runs headlessly (default true,
@@ -127,6 +145,99 @@ func WithMaxConcurrency(n int) Option {
 	}
 }
 
+// WithTimeout overrides the per-call timeout for Engine.Search (default 30s)
+// and Engine.Fetch (default 45s). A non-positive duration resets to the
+// per-operation defaults.
+func WithTimeout(d time.Duration) Option {
+	return func(c *engineConfig) {
+		if d <= 0 {
+			c.timeout = 0
+			return
+		}
+		c.timeout = d
+	}
+}
+
+// WithProxy routes all browser traffic through the given proxy URL (for
+// example "http://host:port", "https://host:port", or "socks5://host:port").
+// Invalid proxy URLs cause New to return an error immediately. Like core
+// gosearch.WithProxy, this is for legitimate network egress, not identity
+// rotation.
+func WithProxy(rawURL string) Option {
+	return func(c *engineConfig) { c.proxyRawURL = strings.TrimSpace(rawURL) }
+}
+
+// WithMaxResults caps the number of results returned by Engine.Search. A
+// non-positive value resets to the default cap (30). Ignored by Engine.Fetch.
+func WithMaxResults(n int) Option {
+	return func(c *engineConfig) {
+		if n <= 0 {
+			c.maxResults = 0
+			return
+		}
+		c.maxResults = n
+	}
+}
+
+// WithBlockedDomains drops Engine.Search results whose host matches one of the
+// given domains or any subdomain of one, mirroring gosearch.WithBlockedDomains.
+// Combined with WithAllowedDomains, deny is applied first. Ignored by Fetch.
+func WithBlockedDomains(domains ...string) Option {
+	return func(c *engineConfig) { c.blockedDomains = append(c.blockedDomains, domains...) }
+}
+
+// WithAllowedDomains keeps only Engine.Search results whose host matches one
+// of the given domains or any subdomain of one, mirroring
+// gosearch.WithAllowedDomains. An empty list means no allowlisting. Ignored by
+// Fetch.
+func WithAllowedDomains(domains ...string) Option {
+	return func(c *engineConfig) { c.allowedDomains = append(c.allowedDomains, domains...) }
+}
+
+// WithWaitSelector instructs Engine.Fetch to wait for the given CSS selector
+// to appear in the DOM (after body is ready) before capturing the rendered
+// HTML — useful for client-rendered SPAs (React, Vue, Next.js) that mount
+// article content asynchronously after initial load. Empty disables the extra
+// wait (the default). Ignored by Engine.Search.
+func WithWaitSelector(selector string) Option {
+	return func(c *engineConfig) { c.waitSelector = strings.TrimSpace(selector) }
+}
+
+// WithWaitDelay instructs Engine.Fetch to wait d after DOM readiness (and any
+// WithWaitSelector) before capturing HTML, letting late hydration or XHR calls
+// settle. Context cancellation cuts the wait short immediately. Non-positive
+// values disable the delay (the default). Ignored by Engine.Search.
+func WithWaitDelay(d time.Duration) Option {
+	return func(c *engineConfig) {
+		if d <= 0 {
+			c.waitDelay = 0
+			return
+		}
+		c.waitDelay = d
+	}
+}
+
+// validateProxyURL verifies that rawURL is a supported Chromium proxy URL when
+// non-empty.
+func validateProxyURL(rawURL string) error {
+	if rawURL == "" {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("browser: invalid proxy url %q: %w", rawURL, err)
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https", "socks4", "socks5", "socks5h":
+	default:
+		return fmt.Errorf("browser: invalid proxy url %q: unsupported scheme %q", rawURL, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("browser: invalid proxy url %q: missing host", rawURL)
+	}
+	return nil
+}
+
 // resolveExecutable returns the path of the chromium-family executable to
 // drive: an explicitly supplied path wins; then the embedded archive (when
 // this binary was built with the gosearch_embed_engine build tag); then
@@ -201,7 +312,7 @@ func normalizedUserAgent(ua string) string {
 // instead of probing PATH itself. The browser itself is NEVER patched or
 // disguised beyond the declared UA — see the package comment for the project
 // line on anti-bot behavior.
-func allocatorFlags(profileDir, executable, userAgent string, headless bool) []chromedp.ExecAllocatorOption {
+func allocatorFlags(profileDir, executable, userAgent, proxyRawURL string, headless bool) []chromedp.ExecAllocatorOption {
 	base := chromedp.DefaultExecAllocatorOptions[:]
 	extra := []chromedp.ExecAllocatorOption{
 		chromedp.ExecPath(executable),
@@ -215,6 +326,9 @@ func allocatorFlags(profileDir, executable, userAgent string, headless bool) []c
 		chromedp.Flag("blink-settings", "imagesEnabled=false"),
 		chromedp.WindowSize(1280, 800),
 		chromedp.UserDataDir(profileDir),
+	}
+	if proxyRawURL != "" {
+		extra = append(extra, chromedp.ProxyServer(proxyRawURL))
 	}
 	return append(base, extra...)
 }

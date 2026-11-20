@@ -12,6 +12,7 @@ import (
 	"github.com/chromedp/chromedp"
 
 	"github.com/BugraAkdemir/gosearch"
+	"github.com/BugraAkdemir/gosearch/internal/provider"
 )
 
 // searchTimeout bounds one rendered search: navigation plus JS settle time.
@@ -40,7 +41,7 @@ func (e *Engine) Search(ctx context.Context, query string) ([]gosearch.Result, e
 	// No hl/num overrides: default locale and result count look like an
 	// ordinary visit, which is exactly the point.
 	var raw string
-	diag, err := e.run(ctx, searchTimeout,
+	diag, err := e.run(ctx, e.effectiveTimeout(searchTimeout),
 		chromedp.Navigate(googleSearchURL(query)),
 		chromedp.ActionFunc(dismissConsentIfNeeded),
 		chromedp.WaitVisible("h3", chromedp.ByQuery),
@@ -58,29 +59,111 @@ func (e *Engine) Search(ctx context.Context, query string) ([]gosearch.Result, e
 		return nil, fmt.Errorf("browser: decode render output: %w", err)
 	}
 
+	organic := normalizeSearchResults(raws)
+	if len(organic) == 0 {
+		return nil, fmt.Errorf("browser: %w: page rendered but no organic results matched the heuristic",
+			gosearch.ErrNoResults)
+	}
+	return applySearchPolicy(organic, e.maxResults, e.allowedDomains, e.blockedDomains), nil
+}
+
+// normalizeSearchResults filters raw DOM candidates down to usable,
+// canonically deduplicated organic results (matching core providers' use of
+// internal/provider.NormalizeURL).
+func normalizeSearchResults(raws []renderResult) []gosearch.Result {
 	out := make([]gosearch.Result, 0, len(raws))
 	seen := make(map[string]bool, len(raws))
 	for _, r := range raws {
 		u := strings.TrimSpace(r.URL)
 		title := strings.TrimSpace(r.Title)
-		if u == "" || title == "" || seen[u] || !usableDestination(u) {
+		if u == "" || title == "" || !usableDestination(u) {
 			continue
 		}
-		seen[u] = true
+		key := provider.NormalizeURL(u)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
 		out = append(out, gosearch.Result{
 			Title:   title,
 			URL:     u,
 			Snippet: strings.TrimSpace(r.Snippet),
 		})
-		if len(out) >= maxSearchResults {
-			break
+	}
+	return out
+}
+
+// applySearchPolicy enforces domain allow/deny filters (deny first, then
+// allow — identical to core gosearch.applyDomainPolicy) and caps output at
+// maxResults (falling back to maxSearchResults when maxResults <= 0).
+func applySearchPolicy(in []gosearch.Result, maxResults int, allowedDomains, blockedDomains []string) []gosearch.Result {
+	capLimit := maxResults
+	if capLimit <= 0 {
+		capLimit = maxSearchResults
+	}
+	filtered := applyDomainPolicy(in, allowedDomains, blockedDomains)
+	if len(filtered) > capLimit {
+		return filtered[:capLimit]
+	}
+	return filtered
+}
+
+// applyDomainPolicy enforces suffix-host domain filtering identical to core
+// gosearch: deny first, then allowlist; results without a parsable host fail
+// an active allowlist.
+func applyDomainPolicy(rs []gosearch.Result, allowedDomains, blockedDomains []string) []gosearch.Result {
+	if len(allowedDomains) == 0 && len(blockedDomains) == 0 {
+		return rs
+	}
+	lower := func(ds []string) []string {
+		out := make([]string, len(ds))
+		for i, d := range ds {
+			out[i] = strings.ToLower(strings.Trim(d, "."))
 		}
+		return out
 	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("browser: %w: page rendered but no organic results matched the heuristic",
-			gosearch.ErrNoResults)
+	denied := lower(blockedDomains)
+	allowed := lower(allowedDomains)
+
+	matches := func(host, domain string) bool {
+		return domain != "" && (host == domain || strings.HasSuffix(host, "."+domain))
 	}
-	return out, nil
+	hostOf := func(rawURL string) string {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			return ""
+		}
+		return strings.ToLower(u.Hostname())
+	}
+
+	out := make([]gosearch.Result, 0, len(rs))
+	for _, r := range rs {
+		host := hostOf(r.URL)
+		blocked := false
+		for _, d := range denied {
+			if host != "" && matches(host, d) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		if len(allowed) > 0 {
+			ok := false
+			for _, d := range allowed {
+				if host != "" && matches(host, d) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // renderResult is one candidate extracted by searchExtractJS.

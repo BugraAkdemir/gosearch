@@ -36,11 +36,19 @@ func (e *Engine) Fetch(ctx context.Context, rawURL string) (*gosearch.Page, erro
 		return nil, fmt.Errorf("browser: fetch %q: only http(s) URLs are supported", rawURL)
 	}
 	var raw string
-	diag, err := e.run(ctx, fetchTimeout,
+	actions := []chromedp.Action{
 		chromedp.Navigate(rawURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
-		chromedp.Evaluate(fetchHTMLJS, &raw),
-	)
+	}
+	if e.waitSelector != "" {
+		actions = append(actions, chromedp.WaitReady(e.waitSelector, chromedp.ByQuery))
+	}
+	if e.waitDelay > 0 {
+		actions = append(actions, sleepAction(e.waitDelay))
+	}
+	actions = append(actions, chromedp.Evaluate(fetchHTMLJS, &raw))
+
+	diag, err := e.run(ctx, e.effectiveTimeout(fetchTimeout), actions...)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("browser: fetch: %w", err)
@@ -112,6 +120,21 @@ func truncateHTMLSafe(raw string, maxBytes int) []byte {
 		}
 	}
 	return b
+}
+
+// sleepAction returns a chromedp Action that pauses for d or returns early if
+// ctx is canceled.
+func sleepAction(d time.Duration) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			return nil
+		}
+	})
 }
 
 // validHTTPOrHTTPS reports whether rawURL parses to an http(s) URL.
