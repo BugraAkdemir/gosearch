@@ -1,3 +1,27 @@
+// Package browser is the OPTIONAL real-browser engine for gosearch: it
+// drives an unmodified Chromium-family browser (Chrome, Edge, Chromium, or
+// chrome-headless-shell) over CDP to run searches and extract page content
+// where plain HTTP cannot — most notably pages that only render or unlock
+// behind JavaScript.
+//
+// It is a separate Go module on purpose: depending on it pulls in chromedp
+// and, potentially, a ~100–300 MB browser runtime. The core gosearch module
+// stays dependency-light; nothing here is imported unless you ask for it.
+//
+// Engine.Fetch delegates extraction to the core module's internal/readability
+// package (plain text or WithMarkdown, 8 MiB UTF-8/tag-safe cap), and
+// Engine.FetchWithFallback / Engine.SearchWithFallback try fast plain-HTTP
+// first before falling back to Chromium.
+//
+// Honest limitations (the line this project will not cross): the browser is
+// driven UNMODIFIED — no stealth patches, no navigator.webdriver masking, no
+// fingerprint spoofing. The only identity adjustment is a standard desktop
+// Chrome User-Agent string (same policy as the core HTTP client); webdriver
+// stays on and everything else stays stock. That means the engine clears
+// JavaScript-gated pages but does NOT defeat IP-reputation blocks or
+// interactive CAPTCHAs. When an engine still refuses to serve results, this
+// package reports ErrChallenge/ErrBlocked-wrapped errors like the rest of
+// gosearch instead of pretending otherwise.
 package browser
 
 import (
