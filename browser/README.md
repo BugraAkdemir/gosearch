@@ -16,10 +16,7 @@ go get github.com/BugraAkdemir/gosearch            # core only (zero extra deps)
 Installing the browser module:
 
 ```bash
-# Until the first prefixed tag is published, pull the tip of main:
-go get github.com/BugraAkdemir/gosearch/browser@main
-# After a browser/vX.Y.Z tag exists (multi-module repos require prefixed tags):
-go get github.com/BugraAkdemir/gosearch/browser
+go get github.com/BugraAkdemir/gosearch/browser@latest
 ```
 
 ## Usage
@@ -171,11 +168,16 @@ Resolution order in `New`:
 3. System discovery — stable-channel names first (`google-chrome-stable`,
    `google-chrome`, `chromium`, `chromium-browser`, `microsoft-edge`,
    `chrome-headless-shell`) plus standard install paths per OS.
-4. Opt-in download — with `browser.AllowDownload(true)`, fetches
-   chrome-headless-shell from Google's official chrome-for-testing CDN into
+4. Prior cached download — read-only check of `<user-cache>/gosearch/browser/`
+   (or `WithCacheDir`) so a previously installed binary works without network
+   and without re-passing `AllowDownload(true)`.
+5. Opt-in download — with `browser.AllowDownload(true)`, fetches
+   `chrome-headless-shell` from Google's official chrome-for-testing CDN (or
+   Microsoft's Playwright CDN on `linux/arm64`) into
    `<user-cache>/gosearch/browser/<version>/`. Never downloads without that
    explicit flag; otherwise returns `ErrNoBrowserFound` naming every path
-   probed.
+   probed. Truly unsupported platforms (e.g. `linux/386`) return
+   `ErrUnsupportedPlatform`.
 
 ## Honest limitations
 
@@ -193,7 +195,8 @@ The browser is driven **unmodified**: no stealth patches, no
 
 When a page renders but no recognizable results appear, `Search` wraps
 `gosearch.ErrChallenge`; genuinely empty extraction surfaces as
-`gosearch.ErrNoResults` — same sentinel vocabulary as the core module.
+`gosearch.ErrNoResults`; calls on a closed engine return
+`browser.ErrEngineClosed`.
 
 ## Tests
 

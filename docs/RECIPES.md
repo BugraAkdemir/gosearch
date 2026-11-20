@@ -323,36 +323,76 @@ Two situations need a real browser:
 The browser lives in a separate module so the core stays dependency-light:
 
 ```bash
-go get github.com/BugraAkdemir/gosearch/browser
+go get github.com/BugraAkdemir/gosearch/browser@latest
 ```
 
 ```go
-e, err := browser.New(ctx) // finds Chrome/Edge/Chromium on the system
+e, err := browser.New(ctx,
+	browser.WithMarkdown(),               // shared readability Markdown output
+	browser.WithTimeout(30*time.Second),  // override default timeouts
+	browser.WithMaxConcurrency(2),        // optional parallel tabs on one browser
+)
 if err != nil {
 	log.Fatal(err)
 }
+defer e.Close()
 
-// Search over rendered DOM — clears JS-gated walls:
-results, err := e.Search(ctx, "facebook")
-_ = e.Close() // close explicitly before any log.Fatal/os.Exit path
+// Hybrid fetch: tries fast plain-HTTP first (Chromium is NOT started for
+// static pages) and falls back to Chromium on JS-empty shells or blocks:
+page, err := e.FetchWithFallback(ctx, "https://example.com/")
 if err != nil {
 	log.Fatal(err)
 }
+fmt.Println(page.Title, len(page.Content))
 
-// Fetch a JS-rendered page — drop-in same return type as gosearch.Fetch:
-page, err := e.Fetch(ctx, "https://example.com/")
+// Hybrid search: plain HTTP first, browser fallback only on ErrBlocked/ErrChallenge:
+results, err := e.SearchWithFallback(ctx, "golang", gosearch.DuckDuckGo)
+if err != nil {
+	log.Fatal(err)
+}
+for _, r := range results {
+	fmt.Println(r.Title, "->", r.URL)
+}
+```
+
+For async SPAs (React/Vue/Next.js) that render content after initial load, add
+a wait selector or settle delay:
+
+```go
+e, err := browser.New(ctx,
+	browser.WithWaitSelector("article"),
+	browser.WithWaitDelay(300*time.Millisecond),
+	browser.WithMarkdown(),
+)
+```
+
+Managing cached browser downloads (never touches system Chrome/Chromium/Edge):
+
+```go
+// Pre-warm during provisioning with progress reporting:
+_ = browser.Install(ctx,
+	browser.AllowDownload(true),
+	browser.WithProgress(func(done, total int64) {
+		fmt.Printf("\rdownloaded %d / %d bytes", done, total)
+	}),
+)
+
+// Remove cached browser binaries later:
+_ = browser.Uninstall() // alias for browser.CleanCache()
 ```
 
 What to know:
 
 | Aspect | Detail |
 |---|---|
-| Executable source | System Chrome/Edge/Chromium discovery → opt-in download (`AllowDownload(true)`) → embedded archive (`-tags gosearch_embed_engine`, see the module README) |
-| Memory | One long-lived process + one reused tab; ~one page's worth steady-state. Keep the `Engine` alive for your program's lifetime instead of creating one per query |
-| Deployment | `browser.Install(ctx, browser.AllowDownload(true))` pre-warms during provisioning; `browser.WithCacheDir(path)` for read-only default cache locations |
+| Executable source | `WithExecutable` → embedded archive (`-tags gosearch_embed_engine`) → system Chrome/Edge/Chromium → prior cached download → opt-in download (`AllowDownload(true)`: chrome-for-testing, or Playwright CDN on `linux/arm64`) |
+| Extraction & Markdown | Shares core's `internal/readability` extractor (8 MiB UTF-8/tag-safe cap); `WithMarkdown()` produces identical Markdown to `gosearch.Fetch` |
+| Memory & concurrency | One long-lived process. Default `WithMaxConcurrency(1)` serializes calls on a single reused tab (~one page's RAM); values `> 1` open isolated tabs per concurrent call inside the same process |
+| Reliability | Honors caller `ctx` cancellation promptly and transparently restarts Chromium once on unexpected process crashes (OOM / external kill) |
+| Deployment & cleanup | `browser.Install(ctx, ...)` pre-warms; `browser.WithCacheDir(path)` overrides cache location; `browser.CleanCache` / `browser.Uninstall` removes cached downloads safely |
 | Detection honesty | The browser is unmodified: no stealth patches, no webdriver masking. It clears JS-gated pages; it does **not** beat IP-reputation blocks or CAPTCHAs |
 
-Full details: [`browser/README.md`](../browser/README.md).
+Full details: [`browser/README.md`](../browser/README.md) and [`docs/API.md#gosearchbrowser-module`](./API.md#gosearchbrowser-module).
 
 ## Troubleshooting
 

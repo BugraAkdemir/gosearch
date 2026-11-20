@@ -139,11 +139,31 @@ A separate, opt-in Go module driving a real, unmodified headless browser for
 pages `Fetch` cannot handle because their content is rendered entirely
 client-side. Deliberately kept out of the core module so
 `go get github.com/BugraAkdemir/gosearch` never pulls in a browser
-dependency. Executable resolution ladder: explicit override > embedded
-archive (`-tags gosearch_embed_engine`) > system discovery >
-permission-gated download of Google's official `chrome-headless-shell`.
-Search/Fetch run over the post-JavaScript DOM and map failures onto the core
-sentinel errors (`ErrChallenge` on consent/captcha walls). The browser is
-never patched or stealthed — it clears JS-gated pages; it does not defeat
-CAPTCHAs or IP reputation. Design details live in `plan.md` Phase 5 and
-[`browser/README.md`](../browser/README.md).
+dependency (`chromedp`).
+
+- **Cross-module sharing without duplication:** because Go checks `internal/`
+  visibility by import path prefix (`github.com/BugraAkdemir/gosearch/...`)
+  rather than module boundary, `browser/` directly reuses core's
+  `internal/readability` (`Extract` / `ExtractMarkdown`, with a UTF-8/tag-safe
+  8 MiB HTML cap) and `internal/provider.NormalizeURL` — keeping extraction
+  and URL deduplication identical across HTTP and browser paths while core
+  remains zero-extra-dependency.
+- **Executable resolution ladder:** `WithExecutable` > embedded archive
+  (`-tags gosearch_embed_engine`) > system discovery > previously cached
+  download (read-only lookup) > opt-in download (`AllowDownload(true)`:
+  Google's official `chrome-for-testing` CDN, or Microsoft's Playwright CDN
+  for `linux/arm64`). `CleanCache`/`Uninstall` manage cached downloads safely.
+- **Lifecycle & concurrency:** `Engine` is concurrency-safe via a bounded
+  semaphore (`WithMaxConcurrency`, default `1` serialized tab to keep memory
+  at ~1 page; `> 1` spawns isolated tabs via `chromedp.NewContext(rootTabCtx)`
+  on the same browser process). Caller `ctx` cancellation propagates via
+  `context.AfterFunc`, unexpected Chromium exits trigger mutex-guarded
+  one-shot crash recovery, and `Close()` waits for graceful `chromedp.Cancel`
+  shutdown before cleaning throwaway profiles.
+- **Hybrid fallback layer (`browser/hybrid.go`):** `FetchWithFallback` and
+  `SearchWithFallback` keep the fast plain-HTTP path as first choice (Chromium
+  stays unstarted on static pages) and fall back to Chromium only on JS-empty
+  shells or `ErrBlocked`/`ErrChallenge` (never on `ErrNoResults`).
+- **Same honest boundary:** the browser is never patched or stealthed — it
+  clears JS-gated pages; it does not defeat CAPTCHAs or IP reputation. Design
+  details live in `plan.md` Phase 5 and [`browser/README.md`](../browser/README.md).

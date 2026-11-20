@@ -245,17 +245,31 @@ For pages whose content only exists after JavaScript runs — which defeats
 plain-HTTP `Fetch()` by definition — an opt-in **separate Go module** drives
 a real, unmodified Chromium-family browser:
 
-- Discovers Chrome/Edge/Chromium on the system; optionally downloads Google's
-  official `chrome-headless-shell` with explicit permission; or embeds the
-  engine at compile time via `-tags gosearch_embed_engine`.
-- One long-lived process and one reused tab: steady-state cost is about one
-  page's RAM, not a browser per request.
+- Discovers Chrome/Edge/Chromium on the system; checks any prior download in
+  cache; optionally downloads Google's official `chrome-headless-shell` (or
+  Microsoft's Playwright headless shell on `linux/arm64`) with explicit
+  permission (`AllowDownload(true)`, with `WithProgress` callbacks); or embeds
+  the engine at compile time via `-tags gosearch_embed_engine`.
+- **Shared extraction & Markdown:** `browser.Fetch` delegates to the core
+  module's `internal/readability` extractor (8 MiB UTF-8/tag-safe cap) and
+  supports `browser.WithMarkdown()`, so HTTP and browser output stay identical.
+- **Hybrid HTTP → Browser fallback:** `e.FetchWithFallback` and
+  `e.SearchWithFallback` try fast plain-HTTP first (never launching Chromium on
+  rich static pages) and fall back to Chromium only on JS-empty shells or
+  `ErrBlocked`/`ErrChallenge`.
+- **Production-hardened lifecycle:** safe for concurrent use (`WithMaxConcurrency`,
+  default 1 serialized tab to keep RAM low), prompt `ctx` cancellation,
+  automatic one-shot crash recovery, SPA wait hooks (`WithWaitSelector`,
+  `WithWaitDelay`), core option parity (`WithTimeout`, `WithProxy`,
+  `WithMaxResults`, `WithAllowedDomains`/`WithBlockedDomains`), and cache
+  cleanup (`CleanCache`/`Uninstall`).
 - Same honest line: it executes JavaScript; it does not solve CAPTCHAs or
   mask automation.
 
 Because it lives in its own module, `go get github.com/BugraAkdemir/gosearch`
 never pulls browser dependencies into your project. See
-[`browser/README.md`](./browser/README.md) for installation and trade-offs.
+[`browser/README.md`](./browser/README.md) and [`docs/API.md#gosearchbrowser-module`](./docs/API.md#gosearchbrowser-module)
+for installation, options, and trade-offs.
 
 ## Versioning & stability
 

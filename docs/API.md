@@ -160,3 +160,61 @@ case err != nil:
     // network error, etc.
 }
 ```
+
+---
+
+## `gosearch/browser` Module
+
+Optional separate Go module (`github.com/BugraAkdemir/gosearch/browser`) for
+JavaScript-rendered pages and JS-gated search walls. Install separately:
+
+```bash
+go get github.com/BugraAkdemir/gosearch/browser@latest
+```
+
+### Functions & `Engine` Methods
+
+| Symbol | Effect |
+|---|---|
+| `browser.New(ctx, ...Option) (*Engine, error)` | Resolves executable (explicit → embedded → system → cached → opt-in download) and returns a lazily started, concurrency-safe `Engine`. |
+| `(*Engine).Search(ctx, query) ([]gosearch.Result, error)` | Renders Google post-JS, deduplicates via canonical URLs, enforces domain policy, and caps results. |
+| `(*Engine).Fetch(ctx, rawURL) (*gosearch.Page, error)` | Renders `rawURL`, captures post-JS HTML (8 MiB UTF-8/tag-safe cap), and runs core `internal/readability` (plain text or Markdown). |
+| `(*Engine).FetchWithFallback(ctx, rawURL, ...gosearch.Option) (*gosearch.Page, error)` | Tries fast plain-HTTP `gosearch.Fetch` first (Chromium stays unstarted on static pages); falls back to `e.Fetch` on `ErrBlocked`/`ErrChallenge` or thin/empty JS shells. |
+| `(*Engine).SearchWithFallback(ctx, query, primary, ...gosearch.Option) ([]gosearch.Result, error)` | Tries plain-HTTP `gosearch.Search` first; falls back to `e.Search` only on `ErrBlocked`/`ErrChallenge` (never on `ErrNoResults`). |
+| `(*Engine).Executable() string` | Reports the resolved Chromium-family binary path. |
+| `(*Engine).Close() error` | Gracefully shuts down Chromium (`chromedp.Cancel`), waits for exit, and removes throwaway profiles (keeps `WithProfileDir`). Idempotent. |
+| `browser.Install(ctx, ...Option) error` | Runs executable discovery/download without creating an `Engine` (useful in Dockerfiles / setup steps). |
+| `browser.CleanCache(...Option) error` / `browser.Uninstall(...Option) error` | Safely removes downloaded/extracted cache entries (honors `WithCacheDir`; rejects unsafe roots; never touches system browsers). |
+| `browser.StableEngineAsset(ctx) (version, url string, err error)` | Returns the stable headless-shell version and download URL for the host platform (chrome-for-testing, or pinned Playwright CDN on `linux/arm64`). |
+| `browser.CurrentPlatform() string` | Returns the chrome-for-testing slug (`linux64`, `mac-arm64`, `mac-x64`, `win64`, or `""`). |
+| `browser.DownloadFile(ctx, url, dstFile) error` | Streams `url` to `dstFile` atomically (`.part` then rename). |
+
+### `browser.Option`
+
+| Option | Effect |
+|---|---|
+| `WithMarkdown()` | Return GitHub-flavored Markdown from `Fetch` / `FetchWithFallback`. Default off. |
+| `WithTimeout(d time.Duration)` | Override per-call timeout (defaults: 30s `Search`, 45s `Fetch`). Non-positive resets to defaults. |
+| `WithProxy(rawURL string)` | Route Chromium traffic through `--proxy-server` (`http`/`https`/`socks4`/`socks5`/`socks5h`). Validated in `New`. |
+| `WithMaxResults(n int)` | Cap `Search` results after domain filtering (default 30). |
+| `WithAllowedDomains(ds ...string)` / `WithBlockedDomains(ds ...string)` | Suffix-host domain policy for `Search` (deny first, then allow). |
+| `WithMaxConcurrency(n int)` | Max concurrent calls per `Engine`. `<= 1` (default) serializes on one shared tab; `> 1` opens isolated tabs on the same browser process. |
+| `WithWaitSelector(selector string)` | Wait for a CSS selector in `Fetch` after `body` is ready (for async SPAs). |
+| `WithWaitDelay(d time.Duration)` | Context-aware settle delay in `Fetch` after DOM/selector readiness. |
+| `WithFallbackMinContent(chars int)` | Minimum trimmed rune count `FetchWithFallback` accepts from HTTP before falling back (default `100`; `0` = empty only). |
+| `WithHeadless(v bool)` | Run headless (`true`, default) or visible window (`false`). |
+| `WithProfileDir(path string)` | Persistent Chromium profile kept across runs and after `Close`. |
+| `WithUserAgent(ua string)` | Override the desktop Chrome User-Agent. |
+| `WithExecutable(path string)` | Force a specific Chromium-family binary, bypassing discovery. |
+| `AllowDownload(v bool)` | Permit one-time headless-shell download into cache when no local browser exists. |
+| `WithProgress(fn func(downloaded, total int64))` | Progress callback invoked per chunk during network download (`AllowDownload`). |
+| `WithCacheDir(path string)` | Override cache directory for downloaded/embedded engines. |
+
+### `browser` Errors
+
+| Error | Meaning |
+|---|---|
+| `browser.ErrNoBrowserFound` | No local/cached browser found and `AllowDownload` was not enabled. |
+| `browser.ErrDownloadDisabled` | Downloads explicitly disabled or embedded archive absent. |
+| `browser.ErrUnsupportedPlatform` | Host `GOOS/GOARCH` has no automatic download source (e.g. `linux/386`). |
+| `browser.ErrEngineClosed` | `Search`, `Fetch`, or fallback helpers called after `Engine.Close()`. |
