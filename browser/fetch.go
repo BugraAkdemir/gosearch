@@ -36,13 +36,16 @@ func (e *Engine) Fetch(ctx context.Context, rawURL string) (*gosearch.Page, erro
 		return nil, fmt.Errorf("browser: fetch %q: only http(s) URLs are supported", rawURL)
 	}
 	var raw string
-	err := e.run(ctx, fetchTimeout,
+	diag, err := e.run(ctx, fetchTimeout,
 		chromedp.Navigate(rawURL),
 		chromedp.WaitReady("body", chromedp.ByQuery),
 		chromedp.Evaluate(fetchHTMLJS, &raw),
 	)
 	if err != nil {
-		return nil, classifyRenderError("fetch", err, e.pageDiagnostics(ctx))
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("browser: fetch: %w", err)
+		}
+		return nil, classifyRenderError("fetch", err, diag)
 	}
 
 	var rendered struct {

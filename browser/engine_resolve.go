@@ -44,6 +44,9 @@ type engineConfig struct {
 	// markdown makes Engine.Fetch return GitHub-flavored Markdown instead of
 	// plain text, matching gosearch.WithMarkdown. Off by default.
 	markdown bool
+	// maxConcurrency bounds how many Search/Fetch calls may run simultaneously
+	// on one Engine. Values <= 1 serialize on a single shared tab (default).
+	maxConcurrency int
 }
 
 // WithHeadless controls whether the browser runs headlessly (default true,
@@ -107,6 +110,21 @@ func WithProgress(fn func(downloaded, total int64)) Option {
 // Ignored by Engine.Search.
 func WithMarkdown() Option {
 	return func(c *engineConfig) { c.markdown = true }
+}
+
+// WithMaxConcurrency sets the maximum number of Search/Fetch calls that may
+// execute simultaneously on one Engine. Values <= 1 (the default) serialize
+// calls on a single reused tab, keeping steady-state memory at roughly one
+// page's worth. Values > 1 open an isolated tab per concurrent call inside the
+// same browser process, sharing cookies and profile state while preventing
+// tabs from clobbering each other.
+func WithMaxConcurrency(n int) Option {
+	return func(c *engineConfig) {
+		if n < 1 {
+			n = 1
+		}
+		c.maxConcurrency = n
+	}
 }
 
 // resolveExecutable returns the path of the chromium-family executable to

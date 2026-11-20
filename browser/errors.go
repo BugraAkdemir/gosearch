@@ -20,3 +20,7 @@ var ErrDownloadDisabled = errors.New("browser: download disabled and no executab
 // errors.Is against this to show a "install a system browser instead"
 // hint instead of a raw platform string.
 var ErrUnsupportedPlatform = errors.New("browser: unsupported platform for automatic download")
+
+// ErrEngineClosed is returned when Search or Fetch is called on an Engine
+// after Close has been called.
+var ErrEngineClosed = errors.New("browser: engine is closed")

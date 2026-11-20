@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -39,14 +40,16 @@ func (e *Engine) Search(ctx context.Context, query string) ([]gosearch.Result, e
 	// No hl/num overrides: default locale and result count look like an
 	// ordinary visit, which is exactly the point.
 	var raw string
-	err := e.run(ctx, searchTimeout,
+	diag, err := e.run(ctx, searchTimeout,
 		chromedp.Navigate(googleSearchURL(query)),
 		chromedp.ActionFunc(dismissConsentIfNeeded),
 		chromedp.WaitVisible("h3", chromedp.ByQuery),
 		chromedp.Evaluate(searchExtractJS, &raw),
 	)
 	if err != nil {
-		diag := e.pageDiagnostics(ctx)
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("browser: search: %w", err)
+		}
 		return nil, classifyRenderError("search", err, diag)
 	}
 
@@ -119,30 +122,37 @@ func googleSearchURL(query string) string {
 // classifyRenderError maps chromedp failures onto gosearch's sentinel
 // vocabulary: a missing h3 after a successful navigation almost always means
 // a consent wall, captcha, or challenge — ErrChallenge — while transport-
-// level failures surface as-is. The landed-on URL and page title are appended
-// when reachable so a failing run reports WHERE the engine ended up instead
-// of a bare timeout.
+// level failures, context cancellation, and closed-engine errors surface as-is.
+// The landed-on URL and page title are appended when reachable so a failing
+// run reports WHERE the engine ended up instead of a bare timeout.
 func classifyRenderError(op string, err error, diag string) error {
 	if err == nil {
 		return nil
 	}
-	if strings.Contains(err.Error(), "context deadline exceeded") ||
+	if errors.Is(err, context.Canceled) || errors.Is(err, ErrEngineClosed) {
+		return fmt.Errorf("browser: %s: %w", op, err)
+	}
+	if errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(err.Error(), "context deadline exceeded") ||
 		strings.Contains(err.Error(), "h3 not found") {
 		msg := "no result markup appeared (likely consent wall or captcha)"
 		if diag != "" {
 			msg += "; landed on: " + diag
 		}
-		return fmt.Errorf("browser: %s: %s: %w", op, msg, gosearch.ErrChallenge)
+		return fmt.Errorf("browser: %s: %s: %w: %w", op, msg, gosearch.ErrChallenge, err)
 	}
 	return fmt.Errorf("browser: %s: %w", op, err)
 }
 
-// pageDiagnostics best-effort captures where the tab actually is (final URL
-// + document title) for error reporting. Never fails the caller: any problem
-// yields an empty string.
-func (e *Engine) pageDiagnostics(_ context.Context) string {
+// pageDiagnostics best-effort captures where tabCtx actually is (final URL +
+// document title) for error reporting. Never panics or fails the caller: a
+// nil, canceled, or dead tab context simply yields an empty string.
+func pageDiagnostics(tabCtx context.Context) string {
+	if tabCtx == nil || tabCtx.Err() != nil {
+		return ""
+	}
 	var raw string
-	dctx, cancel := context.WithTimeout(e.ctx, 3*time.Second)
+	dctx, cancel := context.WithTimeout(tabCtx, 3*time.Second)
 	defer cancel()
 	if err := chromedp.Run(dctx, chromedp.Evaluate(pageStateJS, &raw)); err != nil || raw == "" {
 		return ""
