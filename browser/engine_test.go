@@ -5,18 +5,31 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/BugraAkdemir/gosearch"
 )
 
 func TestPageDiagnosticsNilAndCanceledSafe(t *testing.T) {
-	if got := pageDiagnostics(nil); got != "" {
+	if got := pageDiagnostics(context.Background(), nil, 200*time.Millisecond); got != "" {
 		t.Errorf("pageDiagnostics(nil) = %q, want empty", got)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if got := pageDiagnostics(ctx); got != "" {
-		t.Errorf("pageDiagnostics(canceled) = %q, want empty", got)
+	if got := pageDiagnostics(context.Background(), ctx, 200*time.Millisecond); got != "" {
+		t.Errorf("pageDiagnostics(canceled tab) = %q, want empty", got)
+	}
+	if got := pageDiagnostics(ctx, context.Background(), 200*time.Millisecond); got != "" {
+		t.Errorf("pageDiagnostics(canceled caller) = %q, want empty", got)
+	}
+	if got := diagTimeoutFor(30 * time.Second); got != 500*time.Millisecond {
+		t.Errorf("diagTimeoutFor(30s) = %v, want 500ms", got)
+	}
+	if got := diagTimeoutFor(400 * time.Millisecond); got != 200*time.Millisecond {
+		t.Errorf("diagTimeoutFor(400ms) = %v, want 200ms", got)
+	}
+	if got := diagTimeoutFor(50 * time.Millisecond); got != 100*time.Millisecond {
+		t.Errorf("diagTimeoutFor(50ms) = %v, want 100ms floor", got)
 	}
 }
 

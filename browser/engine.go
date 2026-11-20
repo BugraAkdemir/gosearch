@@ -323,7 +323,7 @@ func (e *Engine) run(ctx context.Context, timeout time.Duration, actions ...chro
 			continue
 		}
 
-		diag := pageDiagnostics(workTab)
+		diag := pageDiagnostics(ctx, workTab, diagTimeoutFor(timeout))
 		if closeWorkTab != nil {
 			closeWorkTab()
 		}

@@ -227,17 +227,53 @@ func classifyRenderError(op string, err error, diag string) error {
 	return fmt.Errorf("browser: %s: %w", op, err)
 }
 
+// diagTimeoutFor picks a short diagnostic probe budget relative to the
+// operation timeout: loaded challenge pages (e.g. Google /sorry) answer JS
+// eval in a few milliseconds, while a wedged navigation must not add seconds
+// past a tight caller WithTimeout.
+func diagTimeoutFor(opTimeout time.Duration) time.Duration {
+	const (
+		maxDiag = 500 * time.Millisecond
+		minDiag = 100 * time.Millisecond
+	)
+	if opTimeout <= 0 {
+		return maxDiag
+	}
+	d := opTimeout / 2
+	if d > maxDiag {
+		return maxDiag
+	}
+	if d < minDiag {
+		return minDiag
+	}
+	return d
+}
+
 // pageDiagnostics best-effort captures where tabCtx actually is (final URL +
 // document title) for error reporting. Never panics or fails the caller: a
 // nil, canceled, or dead tab context simply yields an empty string.
-func pageDiagnostics(tabCtx context.Context) string {
+func pageDiagnostics(callerCtx, tabCtx context.Context, timeout time.Duration) string {
 	if tabCtx == nil || tabCtx.Err() != nil {
 		return ""
 	}
+	if callerCtx != nil && callerCtx.Err() != nil {
+		return ""
+	}
+	if timeout <= 0 {
+		timeout = 500 * time.Millisecond
+	}
 	var raw string
-	dctx, cancel := context.WithTimeout(tabCtx, 3*time.Second)
-	defer cancel()
-	if err := chromedp.Run(dctx, chromedp.Evaluate(pageStateJS, &raw)); err != nil || raw == "" {
+	dctx, cancel := context.WithTimeout(tabCtx, timeout)
+	var stopAfter func() bool
+	if callerCtx != nil {
+		stopAfter = context.AfterFunc(callerCtx, cancel)
+	}
+	err := chromedp.Run(dctx, chromedp.Evaluate(pageStateJS, &raw))
+	if stopAfter != nil {
+		stopAfter()
+	}
+	cancel()
+	if err != nil || raw == "" {
 		return ""
 	}
 	var st struct {
